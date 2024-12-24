@@ -77,17 +77,17 @@ def train_ets_model(data):
     if len(data) < 12:
         return None
 
-    # Converter para série temporal com frequência mensal
-    ts_data = pd.Series(
-        data['notification_count'].astype(float),
-        index=pd.date_range(
-            start=data.index.min(),
-            end=data.index.max(),
-            freq='ME'
-        )
-    )
-
     try:
+        # Converter para série temporal com frequência mensal
+        ts_data = pd.Series(
+            data['notification_count'].astype(float),
+            index=pd.date_range(
+                start=data.index.min(),
+                end=data.index.max(),
+                freq='ME'
+            )
+        )
+
         # Verificar se temos dados suficientes para sazonalidade
         if len(ts_data) >= 24:  # 2 ciclos completos
             model = ExponentialSmoothing(
@@ -106,10 +106,10 @@ def train_ets_model(data):
                 initialization_method='estimated'
             )
 
+        # Ajustar o modelo com parâmetros mais simples
         return model.fit(
             optimized=True,
-            remove_bias=True,
-            use_brute=False
+            remove_bias=True
         )
     except Exception as e:
         print(f"Erro ao treinar ETS: {e}")

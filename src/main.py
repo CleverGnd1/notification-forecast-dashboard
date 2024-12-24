@@ -1,5 +1,6 @@
 import pandas as pd
 import os
+import tensorflow as tf
 from models.predictions import (
     train_all_models,
     make_future_predictions,
@@ -8,6 +9,10 @@ from models.predictions import (
 from visualization.plots import create_combined_visualization
 from models.evaluation import evaluate_models
 from report_generator import generate_html_report
+
+# Configurar nível de log do TensorFlow e desabilitar GPU
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+os.environ['CUDA_VISIBLE_DEVICES'] = '-1'  # Força uso apenas da CPU
 
 def load_data(csv_path='data/notifications_data.csv'):
     """

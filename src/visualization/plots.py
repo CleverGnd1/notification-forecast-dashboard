@@ -3,6 +3,24 @@ from plotly.subplots import make_subplots
 import pandas as pd
 import numpy as np
 
+# Definições globais
+model_groups = {
+    'Estatísticos': ['arima', 'sarima', 'ets'],
+    'Machine Learning': ['random_forest', 'xgboost', 'lightgbm'],
+    'Deep Learning': ['lstm', 'nbeats']
+}
+
+colors_prediction = {
+    'arima': '#FF6B6B',      # Vermelho
+    'sarima': '#4ECDC4',     # Turquesa
+    'ets': '#45B7D1',        # Azul claro
+    'random_forest': '#FFB347',  # Laranja
+    'xgboost': '#98FB98',    # Verde claro
+    'lightgbm': '#DDA0DD',   # Roxo claro
+    'lstm': '#87CEEB',       # Azul céu
+    'nbeats': '#F08080'      # Coral
+}
+
 def create_channel_visualization(df_notifications, channel, models, predictions, row=None, col=None):
     """
     Cria visualização combinada de dados históricos e previsões para cada canal.
@@ -36,32 +54,8 @@ def create_channel_visualization(df_notifications, channel, models, predictions,
             marker_color=colors.get(year, 'gray'),
             text=year_data['notification_count'].apply(lambda x: f'{x:,.0f}'),
             textposition='auto',
-            showlegend=row == 1 and col == 1  # Mostrar legenda apenas para o primeiro gráfico
+            showlegend=True  # Mostrar legenda para cada gráfico
         ))
-
-    # Adicionar previsões
-    colors_prediction = {
-        # Modelos Estatísticos Clássicos
-        'arima': '#FF6B6B',      # Vermelho
-        'sarima': '#4ECDC4',     # Turquesa
-        'ets': '#45B7D1',        # Azul claro
-
-        # Modelos de Machine Learning
-        'random_forest': '#FFB347',  # Laranja
-        'xgboost': '#98FB98',     # Verde claro
-        'lightgbm': '#DDA0DD',    # Roxo claro
-
-        # Modelos de Deep Learning
-        'lstm': '#87CEEB',       # Azul céu
-        'nbeats': '#F08080'      # Coral
-    }
-
-    # Agrupar modelos por categoria
-    model_groups = {
-        'Estatísticos': ['arima', 'sarima', 'ets'],
-        'Machine Learning': ['random_forest', 'xgboost', 'lightgbm'],
-        'Deep Learning': ['lstm', 'nbeats']
-    }
 
     # Adicionar previsões por grupo
     for group_name, model_names in model_groups.items():
@@ -77,8 +71,8 @@ def create_channel_visualization(df_notifications, channel, models, predictions,
                         width=2
                     ),
                     mode='lines',
-                    showlegend=row == 1 and col == 1,  # Mostrar legenda apenas para o primeiro gráfico
-                    legendgroup=group_name  # Agrupar na legenda por categoria
+                    showlegend=True,  # Mostrar legenda para cada gráfico
+                    legendgroup=f"{channel}_{group_name}"  # Grupo único por canal
                 ))
 
     return traces
@@ -120,30 +114,27 @@ def create_combined_visualization(df_notifications, prediction_models, future_pr
     """
     Cria uma visualização combinada com todos os gráficos em um único HTML.
     """
-    # Filtrar dados por ano se especificado
     if year_filter:
         df_notifications = df_notifications[df_notifications.index.year == year_filter].copy()
 
-    channels = df_notifications['channels'].unique()
+    channels = sorted(df_notifications['channels'].unique())
     n_channels = len(channels)
+    n_cols = 1
+    n_rows = n_channels + 1
 
-    # Calcular número de linhas e colunas para o layout
-    n_cols = min(2, n_channels)
-    n_rows = (n_channels + 1) // 2 + 1  # +1 para o gráfico total
-
-    # Criar subplots
+    # Criar subplots com grid_pattern
     fig = make_subplots(
         rows=n_rows,
         cols=n_cols,
-        subplot_titles=[*channels, "Total de Notificações"],
-        vertical_spacing=0.12,
-        horizontal_spacing=0.1
+        subplot_titles=[f"Canal: {channel.upper()}" for channel in channels] + ["Total de Notificações"],
+        specs=[[{"secondary_y": True}] for _ in range(n_rows)],  # Habilitar eixo y secundário
+        vertical_spacing=0.15/n_rows  # Ajuste dinâmico baseado no número de gráficos
     )
 
     # Adicionar visualizações por canal
     for i, channel in enumerate(channels):
-        row = (i // n_cols) + 1
-        col = (i % n_cols) + 1
+        row = i + 1
+        col = 1
 
         channel_traces = create_channel_visualization(
             df_notifications,
@@ -158,10 +149,7 @@ def create_combined_visualization(df_notifications, prediction_models, future_pr
             for trace in channel_traces:
                 fig.add_trace(trace, row=row, col=col)
 
-    # Adicionar visualização total na última linha
-    total_row = n_rows
-    total_col = 1 if n_channels % 2 == 0 else (n_channels % 2)
-
+    # Adicionar visualização total
     total_traces = create_total_notifications_visualization(
         df_notifications,
         prediction_models,
@@ -169,73 +157,159 @@ def create_combined_visualization(df_notifications, prediction_models, future_pr
     )
 
     for trace in total_traces:
-        fig.add_trace(trace, row=total_row, col=total_col)
+        fig.add_trace(trace, row=n_rows, col=1)
 
     # Atualizar layout
     title_suffix = f" - {year_filter}" if year_filter else ""
     fig.update_layout(
         title={
             'text': f"Análise de Notificações{title_suffix}",
-            'y':0.95,
+            'y':0.98,
             'x':0.5,
             'xanchor': 'center',
             'yanchor': 'top'
         },
         showlegend=True,
-        width=1500,
-        height=400 * n_rows,
+        width=1200,
+        height=400 * n_rows,  # Altura proporcional ao número de gráficos
+        template="plotly_white",
         barmode='group',
-        legend=dict(
-            groupclick="toggleitem",  # Permite clicar no grupo para mostrar/esconder todos os itens
-            tracegroupgap=10,         # Espaço entre grupos na legenda
-        ),
-        template="plotly_white",      # Tema mais limpo
-        font=dict(size=12)            # Tamanho da fonte
+        plot_bgcolor='white',
+        paper_bgcolor='white',
     )
 
-    # Atualizar eixos
+    # Configurar cada subplot individualmente
     for i in range(1, n_rows + 1):
-        for j in range(1, n_cols + 1):
-            fig.update_xaxes(title_text="Mês", row=i, col=j)
-            fig.update_yaxes(title_text="Número de Notificações", row=i, col=j)
+        # Configurar eixo X
+        fig.update_xaxes(
+            title_text="Mês",
+            row=i,
+            col=1,
+            tickangle=45,
+            showgrid=True,
+            gridwidth=1,
+            gridcolor='LightGray',
+            rangeselector=dict(
+                buttons=list([
+                    dict(count=3, label="3m", step="month", stepmode="backward"),
+                    dict(count=6, label="6m", step="month", stepmode="backward"),
+                    dict(count=1, label="1y", step="year", stepmode="backward"),
+                    dict(step="all", label="Tudo")
+                ]),
+                bgcolor='rgba(255, 255, 255, 0.8)',
+                y=1.1
+            )
+        )
+
+        # Configurar eixo Y
+        fig.update_yaxes(
+            title_text="Número de Notificações",
+            row=i,
+            col=1,
+            showgrid=True,
+            gridwidth=1,
+            gridcolor='LightGray',
+            rangemode='tozero'
+        )
+
+        # Adicionar legenda para cada subplot
+        fig.update_layout({
+            f'xaxis{i}_rangeslider_visible': False,
+            f'legend{i}': dict(
+                yanchor="top",
+                y=0.99,
+                xanchor="left",
+                x=1.05,
+                bgcolor='rgba(255, 255, 255, 0.8)',
+                bordercolor='rgba(0, 0, 0, 0.2)',
+                borderwidth=1
+            ) if i < n_rows else dict(
+                yanchor="top",
+                y=0.99,
+                xanchor="left",
+                x=1.05,
+                bgcolor='rgba(255, 255, 255, 0.8)',
+                bordercolor='rgba(0, 0, 0, 0.2)',
+                borderwidth=1
+            )
+        })
 
     return fig
 
 def _calculate_total_predictions(future_predictions):
-    """Calcula as previsões totais somando todos os canais."""
-    first_predictions = next(iter(future_predictions.values()))
+    """
+    Calcula as previsões totais somando todos os canais.
+    """
+    # Pegar o primeiro canal para inicializar as datas
+    first_channel = next(iter(future_predictions.values()))
+
+    # Inicializar dicionário com as datas
     total_predictions = {
-        'dates': first_predictions['dates'],
-        'arima': np.zeros(len(first_predictions.get('arima', []))),
-        'sarima': np.zeros(len(first_predictions.get('sarima', []))),
-        'ets': np.zeros(len(first_predictions.get('ets', [])))
+        'dates': first_channel['dates']
     }
 
+    # Lista de todos os modelos possíveis
+    model_names = ['arima', 'sarima', 'ets', 'random_forest', 'xgboost',
+                  'lightgbm', 'lstm', 'nbeats']
+
+    # Inicializar arrays para cada modelo
+    for model in model_names:
+        if model in first_channel and isinstance(first_channel[model], (list, np.ndarray)):
+            total_predictions[model] = np.zeros_like(first_channel[model])
+
+    # Somar previsões de todos os canais
     for channel_predictions in future_predictions.values():
-        for model_name in ['arima', 'sarima', 'ets']:
-            if model_name in channel_predictions:
-                total_predictions[model_name] += channel_predictions[model_name]
+        for model in model_names:
+            if model in channel_predictions and model in total_predictions:
+                try:
+                    total_predictions[model] += channel_predictions[model]
+                except Exception as e:
+                    print(f"Erro ao somar previsões do modelo {model}: {e}")
 
     return total_predictions
 
 def _create_total_predictions_traces(total_predictions):
-    """Cria as traces de previsão total."""
+    """
+    Cria as traces de previsão total.
+    """
     traces = []
     colors = {
-        'arima': '#FF6B6B',
-        'sarima': '#4ECDC4',
-        'ets': '#45B7D1'
+        'arima': '#FF6B6B',      # Vermelho
+        'sarima': '#4ECDC4',     # Turquesa
+        'ets': '#45B7D1',        # Azul claro
+        'random_forest': '#FFB347',  # Laranja
+        'xgboost': '#98FB98',    # Verde claro
+        'lightgbm': '#DDA0DD',   # Roxo claro
+        'lstm': '#87CEEB',       # Azul céu
+        'nbeats': '#F08080'      # Coral
     }
 
-    for model_name in ['arima', 'sarima', 'ets']:
-        if model_name in total_predictions and len(total_predictions[model_name]) > 0:
-            months = [d.strftime('%B') for d in total_predictions['dates']]
-            traces.append(go.Scatter(
-                x=months,
-                y=total_predictions[model_name],
-                name=f'Previsão - {model_name.upper()}',
-                line=dict(color=colors[model_name], dash='dash', width=2),
-                mode='lines'
-            ))
+    # Agrupar modelos por categoria
+    model_groups = {
+        'Estatísticos': ['arima', 'sarima', 'ets'],
+        'Machine Learning': ['random_forest', 'xgboost', 'lightgbm'],
+        'Deep Learning': ['lstm', 'nbeats']
+    }
+
+    # Criar traces para cada modelo por grupo
+    for group_name, models in model_groups.items():
+        for model_name in models:
+            if (model_name in total_predictions and
+                isinstance(total_predictions[model_name], (list, np.ndarray)) and
+                len(total_predictions[model_name]) > 0):
+
+                months = [d.strftime('%B') for d in total_predictions['dates']]
+                traces.append(go.Scatter(
+                    x=months,
+                    y=total_predictions[model_name],
+                    name=f'{group_name} - {model_name.upper()}',
+                    line=dict(
+                        color=colors.get(model_name, 'gray'),
+                        dash='dash',
+                        width=2
+                    ),
+                    mode='lines',
+                    legendgroup=group_name
+                ))
 
     return traces

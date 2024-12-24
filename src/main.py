@@ -84,29 +84,121 @@ def main():
         os.makedirs("output", exist_ok=True)
 
         # Visualização completa
-        combined_figure = create_combined_visualization(
+        figures = create_combined_visualization(
             df_notifications,
             prediction_models,
             future_predictions
         )
 
-        if combined_figure is not None:
-            output_path = "output/analise_completa.html"
-            combined_figure.write_html(output_path)
-            print(f"\nVisualização completa salva em: {output_path}")
+        if figures:
+            # Criar o HTML combinado com todos os gráficos
+            with open("output/analise_completa.html", "w", encoding="utf-8") as f:
+                f.write("""
+                <html>
+                <head>
+                    <title>Análise de Notificações</title>
+                    <style>
+                        body {
+                            font-family: Arial, sans-serif;
+                            margin: 0;
+                            padding: 20px;
+                            background-color: #f5f5f5;
+                            display: flex;
+                            flex-direction: column;
+                            align-items: center;
+                        }
+                        .plot-container {
+                            background-color: white;
+                            margin: 20px auto;
+                            padding: 30px;
+                            border-radius: 8px;
+                            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                            width: 95%;
+                            max-width: 1500px;
+                            display: flex;
+                            justify-content: center;
+                            align-items: center;
+                        }
+                        .plot-container > div {
+                            width: 100% !important;
+                            height: 100% !important;
+                        }
+                        .js-plotly-plot {
+                            width: 100% !important;
+                        }
+                        .main-svg {
+                            width: 100% !important;
+                        }
+                    </style>
+                </head>
+                <body>
+                """)
+
+                # Adicionar cada gráfico em um container
+                for i, fig in enumerate(figures):
+                    f.write(f'<div class="plot-container">{fig.to_html(full_html=False, include_plotlyjs=True if i == 0 else False)}</div>')
+
+                f.write("</body></html>")
+            print(f"\nVisualização completa salva em: output/analise_completa.html")
 
         # Visualização específica para 2024
-        combined_figure_2024 = create_combined_visualization(
+        figures_2024 = create_combined_visualization(
             df_notifications,
             prediction_models,
             future_predictions,
             year_filter=2024
         )
 
-        if combined_figure_2024 is not None:
-            output_path_2024 = "output/analise_2024.html"
-            combined_figure_2024.write_html(output_path_2024)
-            print(f"Visualização 2024 salva em: {output_path_2024}")
+        if figures_2024:
+            # Criar o HTML combinado com todos os gráficos de 2024
+            with open("output/analise_2024.html", "w", encoding="utf-8") as f:
+                f.write("""
+                <html>
+                <head>
+                    <title>Análise de Notificações - 2024</title>
+                    <style>
+                        body {
+                            font-family: Arial, sans-serif;
+                            margin: 0;
+                            padding: 20px;
+                            background-color: #f5f5f5;
+                            display: flex;
+                            flex-direction: column;
+                            align-items: center;
+                        }
+                        .plot-container {
+                            background-color: white;
+                            margin: 20px auto;
+                            padding: 30px;
+                            border-radius: 8px;
+                            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                            width: 95%;
+                            max-width: 1500px;
+                            display: flex;
+                            justify-content: center;
+                            align-items: center;
+                        }
+                        .plot-container > div {
+                            width: 100% !important;
+                            height: 100% !important;
+                        }
+                        .js-plotly-plot {
+                            width: 100% !important;
+                        }
+                        .main-svg {
+                            width: 100% !important;
+                        }
+                    </style>
+                </head>
+                <body>
+                """)
+
+                # Adicionar cada gráfico em um container
+                for i, fig in enumerate(figures_2024):
+                    f.write(f'<div class="plot-container">{fig.to_html(full_html=False, include_plotlyjs=True if i == 0 else False)}</div>')
+
+                f.write("</body></html>")
+            print(f"Visualização 2024 salva em: output/analise_2024.html")
 
         # Gerar relatório completo com abas
         report_path = generate_html_report(
@@ -119,6 +211,7 @@ def main():
 
     except Exception as e:
         print(f"Erro ao criar visualizações: {e}")
+        raise e  # Adicionar raise para ver o erro completo durante o desenvolvimento
 
     print("\nAnálise concluída!")
 

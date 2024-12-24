@@ -36,7 +36,7 @@ def generate_html_report(df_notifications, prediction_models, future_predictions
                 background-color: #f5f5f5;
             }}
             .container {{
-                max-width: 1200px;
+                max-width: 95%;
                 margin: 0 auto;
                 background-color: white;
                 padding: 20px;
@@ -79,6 +79,10 @@ def generate_html_report(df_notifications, prediction_models, future_predictions
                 border: none;
                 margin-right: 5px;
                 border-radius: 5px 5px 0 0;
+                transition: background-color 0.3s;
+            }}
+            .tab:hover {{
+                background: #e9ecef;
             }}
             .tab.active {{
                 background: #007bff;
@@ -89,34 +93,85 @@ def generate_html_report(df_notifications, prediction_models, future_predictions
                 padding: 20px;
                 background: white;
                 border-radius: 0 0 5px 5px;
+                height: calc(100vh - 200px);
+                min-height: 800px;
             }}
             .tab-content.active {{
                 display: block;
             }}
             iframe {{
                 width: 100%;
-                height: 800px;
+                height: 100%;
                 border: none;
+                overflow: auto;
+            }}
+            .plot-container {{
+                width: 100%;
+                height: 100%;
+                overflow: visible;
+            }}
+            .js-plotly-plot {{
+                width: 100% !important;
+            }}
+            .main-svg {{
+                width: 100% !important;
             }}
         </style>
         <script>
+            function reloadIframe(containerId) {{
+                const iframe = document.querySelector('#' + containerId + ' iframe');
+                if (iframe) {{
+                    const currentSrc = iframe.src;
+                    iframe.src = 'about:blank';
+                    setTimeout(() => {{
+                        iframe.src = currentSrc;
+                    }}, 100);
+                }}
+            }}
+
             function openTab(evt, tabName) {{
-                var i, tabcontent, tablinks;
-                tabcontent = document.getElementsByClassName("tab-content");
-                for (i = 0; i < tabcontent.length; i++) {{
+                // Ocultar todos os conteúdos das abas
+                const tabcontent = document.getElementsByClassName("tab-content");
+                for (let i = 0; i < tabcontent.length; i++) {{
                     tabcontent[i].style.display = "none";
                 }}
-                tablinks = document.getElementsByClassName("tab");
-                for (i = 0; i < tablinks.length; i++) {{
+
+                // Remover a classe active de todas as abas
+                const tablinks = document.getElementsByClassName("tab");
+                for (let i = 0; i < tablinks.length; i++) {{
                     tablinks[i].className = tablinks[i].className.replace(" active", "");
                 }}
-                document.getElementById(tabName).style.display = "block";
+
+                // Mostrar o conteúdo da aba selecionada e marcar como ativa
+                const selectedTab = document.getElementById(tabName);
+                selectedTab.style.display = "block";
                 evt.currentTarget.className += " active";
+
+                // Recarregar o iframe da aba selecionada
+                reloadIframe(tabName);
+            }}
+
+            function adjustIframeHeight(iframe) {{
+                try {{
+                    const height = iframe.contentWindow.document.documentElement.scrollHeight;
+                    iframe.style.height = height + 'px';
+                }} catch (e) {{
+                    console.log('Erro ao ajustar altura do iframe:', e);
+                }}
             }}
 
             window.onload = function() {{
+                // Abrir a primeira aba por padrão
                 document.getElementById("defaultOpen").click();
-            }}
+
+                // Configurar ajuste automático de altura para todos os iframes
+                const iframes = document.getElementsByTagName('iframe');
+                for (let iframe of iframes) {{
+                    iframe.onload = function() {{
+                        adjustIframeHeight(this);
+                    }};
+                }}
+            }};
         </script>
     </head>
     <body>
@@ -130,11 +185,11 @@ def generate_html_report(df_notifications, prediction_models, future_predictions
             </div>
 
             <div id="graficosCompletos" class="tab-content">
-                <iframe src="../analise_completa.html"></iframe>
+                <iframe src="../analise_completa.html" scrolling="yes"></iframe>
             </div>
 
             <div id="graficos2024" class="tab-content">
-                <iframe src="../analise_2024.html"></iframe>
+                <iframe src="../analise_2024.html" scrolling="yes"></iframe>
             </div>
 
             <div id="relatorio" class="tab-content">

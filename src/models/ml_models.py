@@ -1,160 +1,75 @@
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import RandomForestRegressor
-from xgboost import XGBRegressor
-from lightgbm import LGBMRegressor
-from sklearn.preprocessing import StandardScaler
-from datetime import datetime
+import xgboost as xgb
+import lightgbm as lgb
 
-def create_features(df):
+def train_random_forest(X, y):
     """
-    Cria features para modelos de ML.
+    Treina um modelo Random Forest.
     """
-    df = df.copy()
-
-    # Remover a coluna channels que não é necessária para previsão
-    if 'channels' in df.columns:
-        df = df.drop('channels', axis=1)
-
-    # Criar features temporais
-    df['year'] = df.index.year
-    df['month'] = df.index.month
-    df['quarter'] = df.index.quarter
-    df['day_of_year'] = df.index.dayofyear
-
-    # Adicionar lag features (valores anteriores)
-    for lag in [1, 2, 3, 6, 12]:
-        df[f'lag_{lag}'] = df['notification_count'].shift(lag)
-
-    # Adicionar médias móveis
-    for window in [3, 6, 12]:
-        df[f'rolling_mean_{window}'] = df['notification_count'].rolling(window=window).mean()
-
-    # Adicionar features de tendência e sazonalidade
-    df['trend'] = np.arange(len(df))
-    df['month_sin'] = np.sin(2 * np.pi * df['month']/12)
-    df['month_cos'] = np.cos(2 * np.pi * df['month']/12)
-
-    # Preencher valores nulos com a média da coluna
-    for col in df.columns:
-        if col != 'notification_count':
-            df[col] = df[col].fillna(df[col].mean())
-
-    return df
-
-def train_random_forest(data, **kwargs):
-    """
-    Treina um modelo Random Forest para previsão de séries temporais.
-    """
-    if len(data) < 12:
-        print("Dados insuficientes para treinar Random Forest (mínimo 12 meses)")
-        return None, None
-
     try:
-        # Preparar dados
-        df = create_features(data)
-
-        # Separar features
-        feature_columns = [col for col in df.columns if col != 'notification_count']
-        X = df[feature_columns]
-        y = df['notification_count']
-
-        # Treinar modelo
+        print("Random Forest: Iniciando treinamento...")
         model = RandomForestRegressor(
             n_estimators=100,
-            max_depth=5,  # Reduzido para evitar overfitting
-            min_samples_leaf=2,
-            min_samples_split=5,
-            random_state=42,
-            **kwargs
+            max_depth=10,
+            random_state=42
         )
         model.fit(X, y)
-
-        return model, feature_columns
+        print("Random Forest: Treinamento concluído com sucesso")
+        return model
     except Exception as e:
-        print(f"Erro ao treinar Random Forest: {e}")
-        return None, None
+        print(f"Random Forest: Erro durante o treinamento - {str(e)}")
+        return None
 
-def train_xgboost(data, **kwargs):
+def train_xgboost(X, y):
     """
-    Treina um modelo XGBoost para previsão de séries temporais.
+    Treina um modelo XGBoost.
     """
-    if len(data) < 12:
-        print("Dados insuficientes para treinar XGBoost (mínimo 12 meses)")
-        return None, None
-
     try:
-        # Preparar dados
-        df = create_features(data)
-
-        # Separar features
-        feature_columns = [col for col in df.columns if col != 'notification_count']
-        X = df[feature_columns]
-        y = df['notification_count']
-
-        # Treinar modelo
-        model = XGBRegressor(
+        print("XGBoost: Iniciando treinamento...")
+        model = xgb.XGBRegressor(
             n_estimators=100,
-            max_depth=4,  # Reduzido para evitar overfitting
-            learning_rate=0.05,
-            min_child_weight=3,
-            subsample=0.8,
-            colsample_bytree=0.8,
-            random_state=42,
-            **kwargs
+            max_depth=6,
+            learning_rate=0.1,
+            random_state=42
         )
         model.fit(X, y)
-
-        return model, feature_columns
+        print("XGBoost: Treinamento concluído com sucesso")
+        return model
     except Exception as e:
-        print(f"Erro ao treinar XGBoost: {e}")
-        return None, None
+        print(f"XGBoost: Erro durante o treinamento - {str(e)}")
+        return None
 
-def train_lightgbm(data, **kwargs):
+def train_lightgbm(X, y):
     """
-    Treina um modelo LightGBM para previsão de séries temporais.
+    Treina um modelo LightGBM.
     """
-    if len(data) < 12:
-        print("Dados insuficientes para treinar LightGBM (mínimo 12 meses)")
-        return None, None
-
     try:
-        # Preparar dados
-        df = create_features(data)
-
-        # Separar features
-        feature_columns = [col for col in df.columns if col != 'notification_count']
-        X = df[feature_columns]
-        y = df['notification_count']
-
-        # Treinar modelo
-        model = LGBMRegressor(
+        print("LightGBM: Iniciando treinamento...")
+        model = lgb.LGBMRegressor(
             n_estimators=100,
-            max_depth=4,  # Reduzido para evitar overfitting
-            learning_rate=0.05,
-            num_leaves=15,
-            min_child_samples=5,
-            subsample=0.8,
-            colsample_bytree=0.8,
-            random_state=42,
-            verbose=-1,  # Reduzir mensagens de log
-            **kwargs
+            max_depth=6,
+            learning_rate=0.1,
+            random_state=42
         )
         model.fit(X, y)
-
-        return model, feature_columns
+        print("LightGBM: Treinamento concluído com sucesso")
+        return model
     except Exception as e:
-        print(f"Erro ao treinar LightGBM: {e}")
-        return None, None
+        print(f"LightGBM: Erro durante o treinamento - {str(e)}")
+        return None
 
 def make_ml_predictions(model, feature_columns, last_data, months_ahead=12):
     """
     Gera previsões usando modelos de ML.
     """
-    if model is None or feature_columns is None:
+    if model is None:
+        print("ML Predictions: Modelo não disponível")
         return None
 
     try:
+        print("ML Predictions: Iniciando geração de previsões...")
         # Criar dataframe para previsões futuras
         future_dates = pd.date_range(
             start=last_data.index[-1],
@@ -162,33 +77,24 @@ def make_ml_predictions(model, feature_columns, last_data, months_ahead=12):
             freq='MS'
         )[1:]
 
-        future_df = pd.DataFrame(index=future_dates)
-        future_df['notification_count'] = np.nan
-
-        # Combinar dados históricos e futuros
-        combined_df = pd.concat([last_data[['notification_count']], future_df])
-
         # Criar features para previsão
-        pred_df = create_features(combined_df)
+        future_features = []
+        for date in future_dates:
+            future_features.append({
+                'year': date.year,
+                'month': date.month,
+                'day': date.day,
+                'dayofweek': date.dayofweek,
+                'quarter': date.quarter
+            })
+        future_features = pd.DataFrame(future_features)
 
-        # Fazer previsões mês a mês
-        predictions = []
-        current_features = pred_df.copy()
+        # Fazer previsões
+        predictions = model.predict(future_features[feature_columns])
+        predictions = np.maximum(predictions, 0)  # Garantir valores não negativos
 
-        for i in range(months_ahead):
-            # Atualizar features
-            if i > 0:
-                current_features.loc[future_dates[i], 'notification_count'] = predictions[-1]
-                current_features = create_features(current_features)
-
-            # Selecionar features para previsão
-            X_pred = current_features.loc[future_dates[i:i+1], feature_columns]
-
-            # Fazer previsão
-            pred = max(0, float(model.predict(X_pred)[0]))  # Garantir previsões não-negativas
-            predictions.append(pred)
-
-        return np.array(predictions)
+        print("ML Predictions: Previsões geradas com sucesso")
+        return predictions
     except Exception as e:
-        print(f"Erro ao gerar previsões ML: {e}")
+        print(f"ML Predictions: Erro ao gerar previsões - {str(e)}")
         return None

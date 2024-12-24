@@ -2,7 +2,6 @@ import pandas as pd
 import os
 import tensorflow as tf
 from models.predictions import (
-    train_all_models,
     make_future_predictions,
     prepare_data_for_prediction
 )
@@ -30,6 +29,10 @@ def main():
     """
     print("Iniciando análise preditiva de notificações...")
 
+    # Criar diretórios necessários
+    os.makedirs("data", exist_ok=True)
+    os.makedirs("output", exist_ok=True)
+
     # Carregar dados
     try:
         df_notifications = load_data()
@@ -42,38 +45,27 @@ def main():
 
     # Análise por canal
     channels = df_notifications['channels'].unique()
-    prediction_models = {}
     future_predictions = {}
     evaluations = {}
 
     for channel in channels:
         print(f"\nAnalisando canal: {channel}")
         try:
-            # Filtrar dados do canal
-            channel_data = df_notifications[df_notifications['channels'] == channel].copy()
-
-            if len(channel_data) < 3:
-                print(f"Dados insuficientes para treinar modelos no canal {channel}.")
-                continue
-
-            # Treinar todos os modelos disponíveis
-            prediction_models[channel] = train_all_models(channel_data)
-
             # Gerar previsões
-            last_date = channel_data.index.max()
             future_predictions[channel] = make_future_predictions(
-                prediction_models[channel],
+                df_notifications,
                 channel,
-                last_date,
-                data=channel_data
+                months_ahead=12
             )
 
-            # Avaliar modelos
-            evaluations[channel] = evaluate_models(
-                channel_data,
-                prediction_models[channel],
-                future_predictions[channel]
-            )
+            if future_predictions[channel] is not None:
+                # Avaliar modelos
+                evaluations[channel] = evaluate_models(
+                    df_notifications,
+                    future_predictions[channel]
+                )
+            else:
+                print(f"Não foi possível gerar previsões para o canal {channel}")
 
         except Exception as e:
             print(f"Erro ao processar canal {channel}: {e}")
@@ -86,7 +78,6 @@ def main():
         # Visualização completa
         figures = create_combined_visualization(
             df_notifications,
-            prediction_models,
             future_predictions
         )
 
@@ -144,7 +135,6 @@ def main():
         # Visualização específica para 2024
         figures_2024 = create_combined_visualization(
             df_notifications,
-            prediction_models,
             future_predictions,
             year_filter=2024
         )
@@ -203,7 +193,6 @@ def main():
         # Gerar relatório completo com abas
         report_path = generate_html_report(
             df_notifications,
-            prediction_models,
             future_predictions,
             evaluations
         )

@@ -1,116 +1,53 @@
+import numpy as np
+import pandas as pd
 from statsmodels.tsa.arima.model import ARIMA
 from statsmodels.tsa.statespace.sarimax import SARIMAX
 from statsmodels.tsa.holtwinters import ExponentialSmoothing
-from pmdarima import auto_arima
-import numpy as np
-import pandas as pd
 
 def train_arima_model(data):
     """
-    Treina um modelo ARIMA otimizado.
+    Treina um modelo ARIMA.
     """
-    if len(data) < 6:
-        return None
-
-    # Converter para série temporal com frequência mensal
-    ts_data = pd.Series(
-        data['notification_count'].astype(float),
-        index=pd.date_range(
-            start=data.index.min(),
-            end=data.index.max(),
-            freq='ME'
-        )
-    )
-
     try:
-        model = auto_arima(
-            ts_data,
-            start_p=0, start_q=0,
-            max_p=2, max_q=2,
-            m=1,
-            seasonal=False,
-            d=1,
-            trace=False,
-            error_action='ignore',
-            suppress_warnings=True,
-            stepwise=True
-        )
-        return model
+        print("ARIMA: Iniciando treinamento...")
+        model = ARIMA(data, order=(1, 1, 1))
+        fitted_model = model.fit()
+        print("ARIMA: Treinamento concluído com sucesso")
+        return fitted_model
     except Exception as e:
-        print(f"Erro ao treinar ARIMA: {e}")
+        print(f"ARIMA: Erro durante o treinamento - {str(e)}")
         return None
 
 def train_sarima_model(data):
     """
-    Treina um modelo SARIMA otimizado.
+    Treina um modelo SARIMA.
     """
-    if len(data) < 24:
-        return None
-
-    # Converter para série temporal com frequência mensal
-    ts_data = pd.Series(
-        data['notification_count'].astype(float),
-        index=pd.date_range(
-            start=data.index.min(),
-            end=data.index.max(),
-            freq='ME'
-        )
-    )
-
     try:
-        model = SARIMAX(
-            ts_data,
-            order=(1, 1, 1),
-            seasonal_order=(1, 1, 1, 12),
-            initialization='approximate_diffuse',
-            enforce_stationarity=False
-        )
-        return model.fit(disp=False)
+        print("SARIMA: Iniciando treinamento...")
+        model = SARIMAX(data, order=(1, 1, 1), seasonal_order=(1, 1, 1, 12))
+        fitted_model = model.fit(disp=False)
+        print("SARIMA: Treinamento concluído com sucesso")
+        return fitted_model
     except Exception as e:
-        print(f"Erro ao treinar SARIMA: {e}")
+        print(f"SARIMA: Erro durante o treinamento - {str(e)}")
         return None
 
 def train_ets_model(data):
     """
-    Treina um modelo ETS otimizado.
+    Treina um modelo ETS (Exponential Smoothing).
     """
-    if len(data) < 12:
-        return None
-
     try:
-        # Converter para série temporal com frequência mensal
-        ts_data = pd.Series(
-            data['notification_count'].astype(float),
-            index=pd.date_range(
-                start=data.index.min(),
-                end=data.index.max(),
-                freq='ME'
-            )
+        print("ETS: Iniciando treinamento...")
+        model = ExponentialSmoothing(
+            data,
+            seasonal_periods=12,
+            trend='add',
+            seasonal='add',
+            damped_trend=True
         )
-
-        # Verificar se temos dados suficientes para sazonalidade
-        if len(ts_data) >= 24:  # 2 ciclos completos
-            model = ExponentialSmoothing(
-                ts_data,
-                trend='add',
-                seasonal='add',
-                seasonal_periods=12,
-                initialization_method='estimated'
-            )
-        else:
-            # Modelo mais simples sem sazonalidade
-            model = ExponentialSmoothing(
-                ts_data,
-                trend='add',
-                seasonal=None,
-                initialization_method='estimated'
-            )
-
-        # Ajustar o modelo com parâmetros mais simples
-        return model.fit(
-            optimized=True,
-            remove_bias=True
-        )
+        fitted_model = model.fit()
+        print("ETS: Treinamento concluído com sucesso")
+        return fitted_model
     except Exception as e:
-        print(f"Erro ao treinar ETS: {e}")
+        print(f"ETS: Erro durante o treinamento - {str(e)}")
         return None

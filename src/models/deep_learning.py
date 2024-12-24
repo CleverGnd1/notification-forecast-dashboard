@@ -66,14 +66,16 @@ def prepare_sequences(data, seq_length):
 
     return np.array(sequences), np.array(targets)
 
-def train_lstm_model(data, seq_length=12, epochs=100):
+def train_lstm_model(data, seq_length=6, epochs=50):
     """
     Treina um modelo LSTM para previsão de séries temporais.
     """
     if len(data) < seq_length * 2:
+        print("LSTM: Dados insuficientes (mínimo 12 pontos)")
         return None, None
 
     try:
+        print("LSTM: Iniciando preparação dos dados...")
         # Normalizar dados
         scaler = MinMaxScaler()
         scaled_data = scaler.fit_transform(data['notification_count'].values.reshape(-1, 1))
@@ -81,12 +83,13 @@ def train_lstm_model(data, seq_length=12, epochs=100):
         # Preparar sequências
         X, y = prepare_sequences(scaled_data, seq_length)
 
+        print("LSTM: Criando e configurando modelo...")
         # Criar modelo
         model = Sequential([
-            LSTM(50, activation='relu', input_shape=(seq_length, 1), return_sequences=True),
-            Dropout(0.2),
-            LSTM(30, activation='relu'),
-            Dropout(0.2),
+            LSTM(32, activation='relu', input_shape=(seq_length, 1), return_sequences=True),
+            Dropout(0.1),
+            LSTM(16, activation='relu'),
+            Dropout(0.1),
             Dense(1)
         ])
 
@@ -95,64 +98,86 @@ def train_lstm_model(data, seq_length=12, epochs=100):
         # Reshape dados para LSTM [samples, time steps, features]
         X = X.reshape((X.shape[0], X.shape[1], 1))
 
+        print("LSTM: Iniciando treinamento...")
         # Treinar modelo
-        model.fit(
+        history = model.fit(
             X, y,
             epochs=epochs,
-            batch_size=32,
+            batch_size=16,
             verbose=0,
             validation_split=0.1
         )
 
+        # Imprimir métricas finais
+        final_loss = history.history['loss'][-1]
+        print(f"LSTM: Treinamento concluído com sucesso (Loss: {final_loss:.6f})")
+
         return model, scaler
     except Exception as e:
-        print(f"Erro ao treinar LSTM: {e}")
+        print(f"LSTM: Erro durante o treinamento - {str(e)}")
         return None, None
 
-def train_nbeats_model(data, seq_length=12, epochs=100):
+def train_nbeats_model(data, seq_length=6, epochs=50):
     """
     Treina um modelo N-BEATS simplificado para previsão de séries temporais.
     """
     if len(data) < seq_length * 2:
+        print("N-BEATS: Dados insuficientes (mínimo 12 pontos)")
         return None, None
 
     try:
+        print("N-BEATS: Iniciando preparação dos dados...")
         # Normalizar dados
         scaler = MinMaxScaler()
         scaled_data = scaler.fit_transform(data['notification_count'].values.reshape(-1, 1))
 
         # Criar dataset
         dataset = TimeSeriesDataset(scaled_data, seq_length)
-        dataloader = DataLoader(dataset, batch_size=32, shuffle=True)
+        dataloader = DataLoader(dataset, batch_size=16, shuffle=True)
 
+        print("N-BEATS: Criando e configurando modelo...")
         # Criar modelo
-        model = NBeatsModel(seq_length, hidden_size=64)
+        model = NBeatsModel(seq_length, hidden_size=32)
         optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
         criterion = nn.MSELoss()
 
+        print("N-BEATS: Iniciando treinamento...")
         # Treinar modelo
         model.train()
+        best_loss = float('inf')
         for epoch in range(epochs):
+            total_loss = 0
             for batch_x, batch_y in dataloader:
                 optimizer.zero_grad()
                 output = model(batch_x)
                 loss = criterion(output, batch_y)
                 loss.backward()
                 optimizer.step()
+                total_loss += loss.item()
 
+            avg_loss = total_loss / len(dataloader)
+            if avg_loss < best_loss:
+                best_loss = avg_loss
+
+            if (epoch + 1) % 10 == 0:
+                print(f"N-BEATS: Época {epoch + 1}/{epochs}, Loss: {avg_loss:.6f}")
+
+        print(f"N-BEATS: Treinamento concluído com sucesso (Melhor Loss: {best_loss:.6f})")
         return model, scaler
     except Exception as e:
-        print(f"Erro ao treinar N-BEATS: {e}")
+        print(f"N-BEATS: Erro durante o treinamento - {str(e)}")
         return None, None
 
-def make_lstm_predictions(model, scaler, last_data, months_ahead=12, seq_length=12):
+def make_lstm_predictions(model, scaler, last_data, months_ahead=12, seq_length=6):
     """
     Gera previsões usando modelo LSTM.
     """
     if model is None or scaler is None:
+        print("LSTM Predictions: Modelo ou scaler não disponíveis")
         return None
 
     try:
+        print("LSTM Predictions: Iniciando geração de previsões...")
         # Preparar dados de entrada
         input_data = scaler.transform(last_data[-seq_length:]['notification_count'].values.reshape(-1, 1))
         input_seq = input_data.reshape((1, seq_length, 1))
@@ -161,29 +186,34 @@ def make_lstm_predictions(model, scaler, last_data, months_ahead=12, seq_length=
         predictions = []
         current_seq = input_seq.copy()
 
-        for _ in range(months_ahead):
+        for i in range(months_ahead):
+            # Fazer previsão
             pred = model.predict(current_seq, verbose=0)[0][0]
+            pred = max(0, pred)  # Garantir valores não negativos
             predictions.append(pred)
 
             # Atualizar sequência para próxima previsão
-            current_seq = np.roll(current_seq, -1)
+            current_seq = np.roll(current_seq, -1, axis=1)
             current_seq[0, -1, 0] = pred
 
         # Reverter normalização
         predictions = scaler.inverse_transform(np.array(predictions).reshape(-1, 1))
+        print("LSTM Predictions: Previsões geradas com sucesso")
         return predictions.flatten()
     except Exception as e:
-        print(f"Erro ao gerar previsões LSTM: {e}")
+        print(f"LSTM Predictions: Erro ao gerar previsões - {str(e)}")
         return None
 
-def make_nbeats_predictions(model, scaler, last_data, months_ahead=12, seq_length=12):
+def make_nbeats_predictions(model, scaler, last_data, months_ahead=12, seq_length=6):
     """
     Gera previsões usando modelo N-BEATS.
     """
     if model is None or scaler is None:
+        print("N-BEATS Predictions: Modelo ou scaler não disponíveis")
         return None
 
     try:
+        print("N-BEATS Predictions: Iniciando geração de previsões...")
         # Preparar dados de entrada
         input_data = scaler.transform(last_data[-seq_length:]['notification_count'].values.reshape(-1, 1))
         input_seq = torch.FloatTensor(input_data)
@@ -194,17 +224,21 @@ def make_nbeats_predictions(model, scaler, last_data, months_ahead=12, seq_lengt
 
         model.eval()
         with torch.no_grad():
-            for _ in range(months_ahead):
-                pred = model(current_seq).numpy()[-1]
+            for i in range(months_ahead):
+                # Fazer previsão
+                output = model(current_seq)
+                pred = output[-1].item()
+                pred = max(0, pred)  # Garantir valores não negativos
                 predictions.append(pred)
 
                 # Atualizar sequência para próxima previsão
-                current_seq = torch.roll(current_seq, -1)
+                current_seq = torch.roll(current_seq, -1, dims=0)
                 current_seq[-1] = torch.tensor(pred)
 
         # Reverter normalização
         predictions = scaler.inverse_transform(np.array(predictions).reshape(-1, 1))
+        print("N-BEATS Predictions: Previsões geradas com sucesso")
         return predictions.flatten()
     except Exception as e:
-        print(f"Erro ao gerar previsões N-BEATS: {e}")
+        print(f"N-BEATS Predictions: Erro ao gerar previsões - {str(e)}")
         return None

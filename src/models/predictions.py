@@ -6,6 +6,7 @@ from statsmodels.tsa.statespace.sarimax import SARIMAX
 from statsmodels.tsa.holtwinters import ExponentialSmoothing
 import statsmodels.api as sm
 from datetime import datetime, timedelta
+from .ml_models import train_ml_models
 
 def get_forecast_steps(last_date_str, target_year, frequency='monthly'):
     """Helper function to calculate forecast steps."""
@@ -168,8 +169,8 @@ def generate_predictions(data, channel, frequency='monthly', target_year=2025):
             arima = ARIMA(ts_data, order=(1, 1, 1))
             arima_fit = arima.fit()
             forecast_values = arima_fit.forecast(steps=forecast_steps)
-            predictions['ARIMA'] = pd.Series(forecast_values, index=forecast_dates)
-            print(f"Previsões ARIMA geradas: {len(predictions['ARIMA'])} registros")
+            predictions['Estatísticos - ARIMA'] = pd.Series(forecast_values, index=forecast_dates)
+            print(f"Previsões ARIMA geradas: {len(predictions['Estatísticos - ARIMA'])} registros")
         except Exception as e:
             print(f"Erro ao gerar previsões ARIMA: {str(e)}")
 
@@ -180,26 +181,42 @@ def generate_predictions(data, channel, frequency='monthly', target_year=2025):
             sarima = SARIMAX(ts_data, order=(1, 1, 1), seasonal_order=seasonal_order)
             sarima_fit = sarima.fit(disp=False)
             forecast_values = sarima_fit.forecast(steps=forecast_steps)
-            predictions['SARIMA'] = pd.Series(forecast_values, index=forecast_dates)
-            print(f"Previsões SARIMA geradas: {len(predictions['SARIMA'])} registros")
+            predictions['Estatísticos - SARIMA'] = pd.Series(forecast_values, index=forecast_dates)
+            print(f"Previsões SARIMA geradas: {len(predictions['Estatísticos - SARIMA'])} registros")
         except Exception as e:
             print(f"Erro ao gerar previsões SARIMA: {str(e)}")
 
         # ETS predictions
         print("\nTentando modelo ETS...")
         try:
+            # Criar DataFrame com índice temporal para o ETS
+            ts_df = pd.DataFrame({'y': ts_data})
+            ts_df.index = pd.date_range(start=ts_data.index[0], periods=len(ts_data), freq='M')
+
             model = ExponentialSmoothing(
-                ts_data,
+                ts_df['y'],
                 seasonal_periods=12 if frequency == 'monthly' else 52,
                 trend='add',
-                seasonal='add'
+                seasonal='add',
+                initialization_method='estimated'
             )
             results = model.fit()
             forecast_values = results.forecast(steps=forecast_steps)
-            predictions['ETS'] = pd.Series(forecast_values, index=forecast_dates)
-            print(f"Previsões ETS geradas: {len(predictions['ETS'])} registros")
+            predictions['Estatísticos - ETS'] = pd.Series(forecast_values, index=forecast_dates)
+            print(f"Previsões ETS geradas: {len(predictions['Estatísticos - ETS'])} registros")
         except Exception as e:
             print(f"Erro ao gerar previsões ETS: {str(e)}")
+
+        # Machine Learning predictions
+        print("\nTentando modelos de Machine Learning...")
+        try:
+            # Preparar dados para ML
+            df = pd.DataFrame({'notification_count': ts_data})
+            ml_predictions = train_ml_models(df, forecast_steps=forecast_steps, frequency=frequency, target_year=target_year)
+            predictions.update(ml_predictions)
+            print(f"Previsões ML geradas: {len(ml_predictions)} modelos")
+        except Exception as e:
+            print(f"Erro ao gerar previsões ML: {str(e)}")
 
         # Convert predictions to PeriodIndex
         freq = 'M' if frequency == 'monthly' else 'W'

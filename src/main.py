@@ -43,6 +43,26 @@ def main(frequency='monthly', target_year=2025):
         all_predictions = {}
         all_data = {}
 
+        # Gerar previsões totais primeiro
+        print("\nGerando previsões totais...")
+        total_data = prepared_data.groupby(prepared_data.index)['notification_count'].sum()
+        total_df = pd.DataFrame({
+            'notification_count': total_data,
+            'channel': 'total'
+        })
+        print(f"Dados totais: {len(total_df)} registros")
+        if len(total_df.index) > 0:
+            print(f"Período: {total_df.index[0]} até {total_df.index[-1]}")
+
+        # Gerar previsões para o total
+        total_predictions = generate_predictions(total_df, 'total', frequency=frequency, target_year=target_year)
+        if total_predictions:
+            all_data['total'] = total_df
+            all_predictions['total'] = total_predictions
+            print("Previsões totais geradas com sucesso")
+        else:
+            print("Aviso: Não foi possível gerar previsões totais")
+
         # Gerar previsões para cada canal
         for channel in channels:
             print(f"\nProcessando canal: {channel}")
@@ -88,12 +108,6 @@ def main(frequency='monthly', target_year=2025):
         if not all_predictions:
             print("\nErro: Nenhuma previsão foi gerada")
             return
-
-        # Gerar previsões totais
-        print("\nGerando previsões totais...")
-        total_predictions = generate_total_predictions(prepared_data, frequency=frequency, target_year=target_year)
-        if total_predictions:
-            all_predictions['total'] = total_predictions
 
         print("\nGerando relatório HTML...")
         generate_html_report(all_data, all_predictions, frequency=frequency)

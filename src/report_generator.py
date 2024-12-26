@@ -26,15 +26,10 @@ def generate_html_report(data, predictions, frequency='monthly'):
             if channel in predictions and predictions[channel]:
                 print(f"\nProcessando gráficos para o canal {channel}...")
 
-                # Gerar gráfico completo
+                # Gerar apenas o gráfico completo
                 plot_path = f"output/plots/plot_{channel}.png"
                 print(f"Gerando gráfico completo em {plot_path}")
                 plot_predictions(data[channel], predictions[channel], channel, plot_path, frequency)
-
-                # Gerar gráfico focado em 2024
-                plot_2024_path = f"output/plots/plot_{channel}_2024.png"
-                print(f"Gerando gráfico 2024 em {plot_2024_path}")
-                plot_predictions_2024(data[channel], predictions[channel], channel, plot_2024_path, frequency)
             else:
                 print(f"Aviso: Canal {channel} não possui previsões")
 
@@ -320,10 +315,6 @@ def generate_html_report(data, predictions, frequency='monthly'):
                     <h3>Histórico e Previsões Completas - Total</h3>
                     <iframe src="plots/plot_total.html"></iframe>
                 </div>
-                <div class="plot-container">
-                    <h3>Foco em 2024 - Total</h3>
-                    <iframe src="plots/plot_total_2024.html"></iframe>
-                </div>
             </div>
             """
 
@@ -466,10 +457,6 @@ def generate_html_report(data, predictions, frequency='monthly'):
                     <div class="plot-container">
                         <h3>Histórico e Previsões Completas</h3>
                         <iframe src="plots/plot_{channel}.html"></iframe>
-                    </div>
-                    <div class="plot-container">
-                        <h3>Foco em 2024</h3>
-                        <iframe src="plots/plot_{channel}_2024.html"></iframe>
                     </div>
                 </div>
                 """

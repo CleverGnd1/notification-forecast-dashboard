@@ -1,244 +1,168 @@
 import numpy as np
 import pandas as pd
-import tensorflow as tf
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import LSTM, Dense, Dropout
-from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.layers import LSTM, Dense, Input
 from sklearn.preprocessing import MinMaxScaler
-import torch
-import torch.nn as nn
-from torch.utils.data import Dataset, DataLoader
 
-class TimeSeriesDataset(Dataset):
-    def __init__(self, data, seq_length):
-        self.data = torch.FloatTensor(data)
-        self.seq_length = seq_length
-
-    def __len__(self):
-        return len(self.data) - self.seq_length
-
-    def __getitem__(self, idx):
-        return (
-            self.data[idx:idx+self.seq_length],
-            self.data[idx+self.seq_length]
-        )
-
-class SimpleNBeatsBlock(nn.Module):
-    def __init__(self, input_size, hidden_size):
-        super().__init__()
-        self.fc1 = nn.Linear(input_size, hidden_size)
-        self.fc2 = nn.Linear(hidden_size, hidden_size)
-        self.fc3 = nn.Linear(hidden_size, input_size)
-        self.relu = nn.ReLU()
-
-    def forward(self, x):
-        x = self.relu(self.fc1(x))
-        x = self.relu(self.fc2(x))
-        return self.fc3(x)
-
-class NBeatsModel(nn.Module):
-    def __init__(self, input_size, hidden_size, num_blocks=3):
-        super().__init__()
-        self.blocks = nn.ModuleList([
-            SimpleNBeatsBlock(input_size, hidden_size)
-            for _ in range(num_blocks)
-        ])
-
-    def forward(self, x):
-        residuals = x
-        for block in self.blocks:
-            block_out = block(residuals)
-            residuals = residuals - block_out
-        return residuals
-
-def prepare_sequences(data, seq_length):
+def prepare_sequences(data, n_steps=6, frequency='monthly'):
     """
     Prepara sequências para modelos de deep learning.
+
+    Args:
+        data (pd.Series): Série temporal
+        n_steps (int): Tamanho da sequência
+        frequency (str): Frequência dos dados ('monthly' ou 'weekly')
     """
-    sequences = []
-    targets = []
+    if isinstance(data, pd.Series):
+        values = data.to_numpy().reshape(-1, 1)
+    else:
+        values = np.array(data).reshape(-1, 1)
 
-    for i in range(len(data) - seq_length):
-        seq = data[i:i+seq_length]
-        target = data[i+seq_length]
-        sequences.append(seq)
-        targets.append(target)
+    # Normalizar dados
+    scaler = MinMaxScaler(feature_range=(0, 1))
+    scaled = scaler.fit_transform(values)
 
-    return np.array(sequences), np.array(targets)
+    # Criar sequências
+    X, y = [], []
+    for i in range(len(scaled) - n_steps):
+        X.append(scaled[i:(i + n_steps), 0])
+        y.append(scaled[i + n_steps, 0])
 
-def train_lstm_model(data, seq_length=6, epochs=50):
+    return np.array(X), np.array(y), scaler
+
+def train_deep_learning_models(data, forecast_steps=12, frequency='monthly', target_year=2025):
     """
-    Treina um modelo LSTM para previsão de séries temporais.
-    """
-    if len(data) < seq_length * 2:
-        print("LSTM: Dados insuficientes (mínimo 12 pontos)")
-        return None, None
+    Treina modelos de deep learning.
 
+    Args:
+        data (pd.DataFrame): DataFrame com os dados
+        forecast_steps (int): Número de passos para previsão
+        frequency (str): Frequência dos dados ('monthly' ou 'weekly')
+        target_year (int): Ano alvo para as previsões
+    """
+    predictions = {}
+    y = data['notification_count']
+    last_date = y.index[-1]
+
+    # Definir parâmetros com base na frequência
+    if frequency == 'weekly':
+        n_steps = 12  # 3 meses em semanas
+        epochs = 50
+    else:
+        n_steps = 6   # 6 meses
+        epochs = 100
+
+    # Preparar dados
+    X, y_train, scaler = prepare_sequences(y, n_steps, frequency)
+
+    # LSTM
     try:
         print("LSTM: Iniciando preparação dos dados...")
-        # Normalizar dados
-        scaler = MinMaxScaler()
-        scaled_data = scaler.fit_transform(data['notification_count'].values.reshape(-1, 1))
-
-        # Preparar sequências
-        X, y = prepare_sequences(scaled_data, seq_length)
+        X_lstm = X.reshape((X.shape[0], X.shape[1], 1))
 
         print("LSTM: Criando e configurando modelo...")
-        # Criar modelo
         model = Sequential([
-            LSTM(32, activation='relu', input_shape=(seq_length, 1), return_sequences=True),
-            Dropout(0.1),
-            LSTM(16, activation='relu'),
-            Dropout(0.1),
+            LSTM(50, activation='relu', input_shape=(n_steps, 1), return_sequences=True),
+            LSTM(50, activation='relu'),
             Dense(1)
         ])
-
-        model.compile(optimizer=Adam(learning_rate=0.001), loss='mse')
-
-        # Reshape dados para LSTM [samples, time steps, features]
-        X = X.reshape((X.shape[0], X.shape[1], 1))
+        model.compile(optimizer='adam', loss='mse')
 
         print("LSTM: Iniciando treinamento...")
-        # Treinar modelo
-        history = model.fit(
-            X, y,
-            epochs=epochs,
-            batch_size=16,
-            verbose=0,
-            validation_split=0.1
+        history = model.fit(X_lstm, y_train, epochs=epochs, verbose=0)
+        print(f"LSTM: Treinamento concluído com sucesso (Loss: {history.history['loss'][-1]:.6f})")
+
+        print("LSTM Predictions: Iniciando geração de previsões...")
+        last_sequence = np.array(y[-n_steps:]).reshape(-1, 1)
+        last_sequence = scaler.transform(last_sequence)
+        future_predictions = []
+
+        current_sequence = last_sequence.reshape(1, n_steps, 1)
+        for _ in range(forecast_steps):
+            next_pred = model.predict(current_sequence, verbose=0)
+            future_predictions.append(next_pred[0, 0])
+            current_sequence = np.roll(current_sequence, -1)
+            current_sequence[0, -1, 0] = next_pred
+
+        future_predictions = scaler.inverse_transform(
+            np.array(future_predictions).reshape(-1, 1)
+        ).flatten()
+
+        # Criar índices futuros
+        if frequency == 'weekly':
+            future_dates = pd.date_range(
+                start=last_date + pd.Timedelta(weeks=1),
+                periods=forecast_steps,
+                freq='W'
+            )
+        else:
+            future_dates = pd.date_range(
+                start=last_date + pd.DateOffset(months=1),
+                periods=forecast_steps,
+                freq='M'
+            )
+
+        predictions["Deep Learning - LSTM"] = pd.Series(
+            future_predictions,
+            index=future_dates
         )
-
-        # Imprimir métricas finais
-        final_loss = history.history['loss'][-1]
-        print(f"LSTM: Treinamento concluído com sucesso (Loss: {final_loss:.6f})")
-
-        return model, scaler
+        print("LSTM Predictions: Previsões geradas com sucesso")
+        print("✓ LSTM: Previsão gerada com sucesso")
     except Exception as e:
         print(f"LSTM: Erro durante o treinamento - {str(e)}")
-        return None, None
 
-def train_nbeats_model(data, seq_length=6, epochs=50):
-    """
-    Treina um modelo N-BEATS simplificado para previsão de séries temporais.
-    """
-    if len(data) < seq_length * 2:
-        print("N-BEATS: Dados insuficientes (mínimo 12 pontos)")
-        return None, None
-
+    # N-BEATS (simplificado)
     try:
         print("N-BEATS: Iniciando preparação dos dados...")
-        # Normalizar dados
-        scaler = MinMaxScaler()
-        scaled_data = scaler.fit_transform(data['notification_count'].values.reshape(-1, 1))
-
-        # Criar dataset
-        dataset = TimeSeriesDataset(scaled_data, seq_length)
-        dataloader = DataLoader(dataset, batch_size=16, shuffle=True)
+        X_nbeats = X.reshape((X.shape[0], X.shape[1]))
 
         print("N-BEATS: Criando e configurando modelo...")
-        # Criar modelo
-        model = NBeatsModel(seq_length, hidden_size=32)
-        optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
-        criterion = nn.MSELoss()
+        model = Sequential([
+            Dense(32, activation='relu', input_shape=(n_steps,)),
+            Dense(64, activation='relu'),
+            Dense(32, activation='relu'),
+            Dense(1)
+        ])
+        model.compile(optimizer='adam', loss='mse')
 
         print("N-BEATS: Iniciando treinamento...")
-        # Treinar modelo
-        model.train()
-        best_loss = float('inf')
-        for epoch in range(epochs):
-            total_loss = 0
-            for batch_x, batch_y in dataloader:
-                optimizer.zero_grad()
-                output = model(batch_x)
-                loss = criterion(output, batch_y)
-                loss.backward()
-                optimizer.step()
-                total_loss += loss.item()
+        history = model.fit(X_nbeats, y_train, epochs=epochs, verbose=0)
 
-            avg_loss = total_loss / len(dataloader)
-            if avg_loss < best_loss:
-                best_loss = avg_loss
+        last_sequence = np.array(y[-n_steps:]).reshape(-1, 1)
+        last_sequence = scaler.transform(last_sequence)
+        future_predictions = []
 
-            if (epoch + 1) % 10 == 0:
-                print(f"N-BEATS: Época {epoch + 1}/{epochs}, Loss: {avg_loss:.6f}")
+        current_sequence = last_sequence.reshape(1, n_steps)
+        for _ in range(forecast_steps):
+            next_pred = model.predict(current_sequence, verbose=0)
+            future_predictions.append(next_pred[0, 0])
+            current_sequence = np.roll(current_sequence, -1)
+            current_sequence[0, -1] = next_pred
 
-        print(f"N-BEATS: Treinamento concluído com sucesso (Melhor Loss: {best_loss:.6f})")
-        return model, scaler
+        future_predictions = scaler.inverse_transform(
+            np.array(future_predictions).reshape(-1, 1)
+        ).flatten()
+
+        # Criar índices futuros
+        if frequency == 'weekly':
+            future_dates = pd.date_range(
+                start=last_date + pd.Timedelta(weeks=1),
+                periods=forecast_steps,
+                freq='W'
+            )
+        else:
+            future_dates = pd.date_range(
+                start=last_date + pd.DateOffset(months=1),
+                periods=forecast_steps,
+                freq='M'
+            )
+
+        predictions["Deep Learning - N-BEATS"] = pd.Series(
+            future_predictions,
+            index=future_dates
+        )
+        print("✓ N-BEATS: Previsão gerada com sucesso")
     except Exception as e:
         print(f"N-BEATS: Erro durante o treinamento - {str(e)}")
-        return None, None
 
-def make_lstm_predictions(model, scaler, last_data, months_ahead=12, seq_length=6):
-    """
-    Gera previsões usando modelo LSTM.
-    """
-    if model is None or scaler is None:
-        print("LSTM Predictions: Modelo ou scaler não disponíveis")
-        return None
-
-    try:
-        print("LSTM Predictions: Iniciando geração de previsões...")
-        # Preparar dados de entrada
-        input_data = scaler.transform(last_data[-seq_length:]['notification_count'].values.reshape(-1, 1))
-        input_seq = input_data.reshape((1, seq_length, 1))
-
-        # Fazer previsões
-        predictions = []
-        current_seq = input_seq.copy()
-
-        for i in range(months_ahead):
-            # Fazer previsão
-            pred = model.predict(current_seq, verbose=0)[0][0]
-            pred = max(0, pred)  # Garantir valores não negativos
-            predictions.append(pred)
-
-            # Atualizar sequência para próxima previsão
-            current_seq = np.roll(current_seq, -1, axis=1)
-            current_seq[0, -1, 0] = pred
-
-        # Reverter normalização
-        predictions = scaler.inverse_transform(np.array(predictions).reshape(-1, 1))
-        print("LSTM Predictions: Previsões geradas com sucesso")
-        return predictions.flatten()
-    except Exception as e:
-        print(f"LSTM Predictions: Erro ao gerar previsões - {str(e)}")
-        return None
-
-def make_nbeats_predictions(model, scaler, last_data, months_ahead=12, seq_length=6):
-    """
-    Gera previsões usando modelo N-BEATS.
-    """
-    if model is None or scaler is None:
-        print("N-BEATS Predictions: Modelo ou scaler não disponíveis")
-        return None
-
-    try:
-        print("N-BEATS Predictions: Iniciando geração de previsões...")
-        # Preparar dados de entrada
-        input_data = scaler.transform(last_data[-seq_length:]['notification_count'].values.reshape(-1, 1))
-        input_seq = torch.FloatTensor(input_data)
-
-        # Fazer previsões
-        predictions = []
-        current_seq = input_seq.clone()
-
-        model.eval()
-        with torch.no_grad():
-            for i in range(months_ahead):
-                # Fazer previsão
-                output = model(current_seq)
-                pred = output[-1].item()
-                pred = max(0, pred)  # Garantir valores não negativos
-                predictions.append(pred)
-
-                # Atualizar sequência para próxima previsão
-                current_seq = torch.roll(current_seq, -1, dims=0)
-                current_seq[-1] = torch.tensor(pred)
-
-        # Reverter normalização
-        predictions = scaler.inverse_transform(np.array(predictions).reshape(-1, 1))
-        print("N-BEATS Predictions: Previsões geradas com sucesso")
-        return predictions.flatten()
-    except Exception as e:
-        print(f"N-BEATS Predictions: Erro ao gerar previsões - {str(e)}")
-        return None
+    return predictions

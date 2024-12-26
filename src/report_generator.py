@@ -1,122 +1,226 @@
 import os
-from datetime import datetime
-import pandas as pd
-from models.evaluation import evaluate_models
+from visualization.plot_utils import plot_predictions, plot_predictions_2024
 
-def generate_html_report(data, predictions, evaluations):
+def generate_html_report(data, predictions, frequency='monthly'):
     """
-    Gera um relatório HTML com análises e previsões.
+    Gera relatório HTML com os resultados da análise.
+
+    Args:
+        data (dict): Dicionário com os dados históricos por canal
+        predictions (dict): Dicionário com as previsões por canal
+        frequency (str): Frequência dos dados ('monthly' ou 'weekly')
     """
-    # Criar diretório de saída se não existir
-    os.makedirs("output", exist_ok=True)
-    output_path = "output/relatorio_analise.html"
+    try:
+        print("\nIniciando geração do relatório HTML...")
+        print(f"Frequência dos dados: {frequency}")
+        print(f"Canais disponíveis: {', '.join(data.keys())}")
+        print(f"Canais com previsões: {', '.join(predictions.keys())}")
 
-    # Gerar gráficos
-    from plot_generator import plot_predictions, plot_predictions_2024
+        # Criar diretório de saída se não existir
+        os.makedirs("output", exist_ok=True)
+        os.makedirs("output/plots", exist_ok=True)
 
-    # Criar HTML com chaves escapadas no CSS
-    html_content = """<!DOCTYPE html>
-<html>
-<head>
-    <title>Relatório de Análise de Notificações</title>
-    <style>{{
-        body {{ font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f5f5f5; }}
-        .container {{ max-width: 1500px; margin: 0 auto; background-color: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }}
-        .tab {{ overflow: hidden; border: 1px solid #ccc; background-color: #f1f1f1; border-radius: 8px 8px 0 0; }}
-        .tab button {{ background-color: inherit; float: left; border: none; outline: none; cursor: pointer; padding: 14px 16px; transition: 0.3s; font-size: 16px; }}
-        .tab button:hover {{ background-color: #ddd; }}
-        .tab button.active {{ background-color: #3498db; color: white; }}
-        .tabcontent {{ display: none; padding: 20px; border: 1px solid #ccc; border-top: none; border-radius: 0 0 8px 8px; }}
-        .plot-container {{ width: 100%; margin: 20px 0; text-align: center; }}
-        .plot-container img {{ max-width: 100%; height: auto; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }}
-        table {{ width: 100%; border-collapse: collapse; margin: 20px 0; }}
-        th, td {{ padding: 12px; text-align: left; border-bottom: 1px solid #ddd; }}
-        th {{ background-color: #3498db; color: white; }}
-        tr:nth-child(even) {{ background-color: #f9f9f9; }}
-        tr:hover {{ background-color: #f5f5f5; }}
-    }}</style>
-</head>
-<body>
-    <div class="container">
-        <h1>Relatório de Análise de Notificações</h1>
-        <div class="tab">
-            <button class="tablinks" onclick="openTab(event, 'graficos')" id="defaultOpen">Gráficos Completos</button>
-            <button class="tablinks" onclick="openTab(event, 'graficos2024')">Gráficos 2024</button>
-            <button class="tablinks" onclick="openTab(event, 'metricas')">Métricas de Avaliação</button>
-        </div>
-        <div id="graficos" class="tabcontent">
-            <h2>Gráficos de Previsão</h2>
-            {graficos_content}
-        </div>
-        <div id="graficos2024" class="tabcontent">
-            <h2>Gráficos de Previsão - 2024</h2>
-            {graficos_2024_content}
-        </div>
-        <div id="metricas" class="tabcontent">
-            <h2>Métricas de Avaliação dos Modelos</h2>
-            {metricas_content}
-        </div>
-    </div>
-    <script>
-        function openTab(evt, tabName) {{{{
-            var i, tabcontent, tablinks;
-            tabcontent = document.getElementsByClassName("tabcontent");
-            for (i = 0; i < tabcontent.length; i++) {{{{
-                tabcontent[i].style.display = "none";
-            }}}}
-            tablinks = document.getElementsByClassName("tablinks");
-            for (i = 0; i < tablinks.length; i++) {{{{
-                tablinks[i].className = tablinks[i].className.replace(" active", "");
-            }}}}
-            document.getElementById(tabName).style.display = "block";
-            evt.currentTarget.className += " active";
-        }}}}
-        document.getElementById("defaultOpen").click();
-    </script>
-</body>
-</html>"""
+        # Gerar gráficos para cada canal
+        print("\nGerando gráficos...")
+        for channel in data.keys():
+            if channel in predictions and predictions[channel]:
+                print(f"\nProcessando gráficos para o canal {channel}...")
 
-    # Gerar conteúdo dos gráficos
-    graficos_content = ""
-    graficos_2024_content = ""
-    for channel in data['channels'].unique():
-        if channel in predictions:
-            # Filtrar dados do canal
-            channel_data = data[data['channels'] == channel].copy()
-            channel_data = channel_data.set_index('month')
-            channel_data = channel_data.sort_index()
+                # Gerar gráfico completo
+                plot_path = f"output/plots/plot_{channel}.png"
+                print(f"Gerando gráfico completo em {plot_path}")
+                plot_predictions(data[channel], predictions[channel], channel, plot_path, frequency)
 
-            # Gerar e salvar gráficos
-            plot_path = f"output/plot_{channel}.png"
-            plot_2024_path = f"output/plot_2024_{channel}.png"
+                # Gerar gráfico focado em 2024
+                plot_2024_path = f"output/plots/plot_{channel}_2024.png"
+                print(f"Gerando gráfico 2024 em {plot_2024_path}")
+                plot_predictions_2024(data[channel], predictions[channel], channel, plot_2024_path, frequency)
+            else:
+                print(f"Aviso: Canal {channel} não possui previsões")
 
-            plot_predictions(channel_data, predictions[channel], channel, plot_path)
-            plot_predictions_2024(channel_data, predictions[channel], channel, plot_2024_path)
+        # Gerar HTML
+        print("\nGerando arquivo HTML...")
+        import pandas as pd
+        current_time = pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')
 
-            # Adicionar ao HTML
-            graficos_content += f'<div class="plot-container"><h3>Canal: {channel}</h3><img src="{os.path.basename(plot_path)}" alt="Gráfico {channel}"></div>'
-            graficos_2024_content += f'<div class="plot-container"><h3>Canal: {channel}</h3><img src="{os.path.basename(plot_2024_path)}" alt="Gráfico 2024 {channel}"></div>'
+        template = f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Análise de Previsões de Notificações</title>
+            <style>
+                body {{
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                    margin: 0;
+                    padding: 0;
+                    background-color: #f0f2f5;
+                    color: #1a1a1a;
+                }}
+                .container {{
+                    max-width: 1400px;
+                    margin: 40px auto;
+                    padding: 30px;
+                }}
+                .header {{
+                    background-color: #ffffff;
+                    padding: 30px;
+                    border-radius: 12px;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                    margin-bottom: 30px;
+                }}
+                h1 {{
+                    color: #1a73e8;
+                    margin: 0;
+                    font-size: 2.5em;
+                    text-align: center;
+                }}
+                .summary {{
+                    background-color: #ffffff;
+                    padding: 25px;
+                    border-radius: 12px;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                    margin-bottom: 30px;
+                }}
+                .summary h2 {{
+                    color: #1a73e8;
+                    margin-top: 0;
+                }}
+                .channel-section {{
+                    background-color: #ffffff;
+                    padding: 25px;
+                    border-radius: 12px;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                    margin-bottom: 30px;
+                }}
+                .channel-section h2 {{
+                    color: #1a73e8;
+                    margin-top: 0;
+                    padding-bottom: 15px;
+                    border-bottom: 2px solid #e8eaed;
+                }}
+                .plot-container {{
+                    margin: 25px 0;
+                    width: 100%;
+                    height: 600px;
+                }}
+                .plot-container h3 {{
+                    color: #5f6368;
+                    margin: 15px 0;
+                }}
+                .stats {{
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                    gap: 20px;
+                    margin: 20px 0;
+                }}
+                .stat-card {{
+                    background-color: #f8f9fa;
+                    padding: 15px;
+                    border-radius: 8px;
+                    text-align: center;
+                }}
+                .stat-card h4 {{
+                    color: #5f6368;
+                    margin: 0 0 10px 0;
+                }}
+                .stat-value {{
+                    font-size: 1.5em;
+                    color: #1a73e8;
+                    font-weight: bold;
+                }}
+                .footer {{
+                    text-align: center;
+                    padding: 20px;
+                    color: #5f6368;
+                    font-size: 0.9em;
+                    background-color: #ffffff;
+                    border-radius: 12px;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                }}
+                iframe {{
+                    width: 100%;
+                    height: 100%;
+                    border: none;
+                    border-radius: 8px;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                }}
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <h1>Relatório de Previsões de Notificações</h1>
+                </div>
+        """
 
-    # Gerar conteúdo das métricas
-    metricas_content = ""
-    for channel in evaluations:
-        metricas_content += f'<h3>Canal: {channel}</h3><table><tr><th>Modelo</th><th>MSE</th><th>RMSE</th><th>MAE</th><th>R²</th></tr>'
+        # Adicionar seções para cada canal
+        for channel in data.keys():
+            if channel in predictions and predictions[channel]:
+                channel_data = data[channel]
+                channel_stats = {
+                    'total_records': len(channel_data),
+                    'mean': channel_data['notification_count'].mean(),
+                    'max': channel_data['notification_count'].max(),
+                    'min': channel_data['notification_count'].min(),
+                    'last_value': channel_data['notification_count'].iloc[-1]
+                }
 
-        for model, metrics in evaluations[channel].items():
-            if metrics:
-                metricas_content += f'<tr><td>{model}</td><td>{metrics["MSE"]:.2f}</td><td>{metrics["RMSE"]:.2f}</td><td>{metrics["MAE"]:.2f}</td><td>{metrics["R2"]:.2f}</td></tr>'
+                template += f"""
+                <div class="channel-section">
+                    <h2>Canal: {channel}</h2>
+                    <div class="stats">
+                        <div class="stat-card">
+                            <h4>Total de Registros</h4>
+                            <div class="stat-value">{channel_stats['total_records']}</div>
+                        </div>
+                        <div class="stat-card">
+                            <h4>Média de Notificações</h4>
+                            <div class="stat-value">{channel_stats['mean']:.1f}</div>
+                        </div>
+                        <div class="stat-card">
+                            <h4>Máximo</h4>
+                            <div class="stat-value">{channel_stats['max']:.0f}</div>
+                        </div>
+                        <div class="stat-card">
+                            <h4>Mínimo</h4>
+                            <div class="stat-value">{channel_stats['min']:.0f}</div>
+                        </div>
+                        <div class="stat-card">
+                            <h4>Último Valor</h4>
+                            <div class="stat-value">{channel_stats['last_value']:.0f}</div>
+                        </div>
+                    </div>
+                    <div class="plot-container">
+                        <h3>Histórico e Previsões Completas</h3>
+                        <iframe src="plots/plot_{channel}.html"></iframe>
+                    </div>
+                    <div class="plot-container">
+                        <h3>Foco em 2024</h3>
+                        <iframe src="plots/plot_{channel}_2024.html"></iframe>
+                    </div>
+                </div>
+                """
 
-        metricas_content += "</table>"
+        template += f"""
+                <div class="footer">
+                    <p>Relatório gerado automaticamente | Frequência: {frequency} | Data: {current_time}</p>
+                </div>
+            </div>
+        </body>
+        </html>
+        """
 
-    # Substituir placeholders no template
-    html_content = html_content.format(
-        graficos_content=graficos_content,
-        graficos_2024_content=graficos_2024_content,
-        metricas_content=metricas_content
-    )
+        # Salvar arquivo HTML
+        output_path = "output/report.html"
+        print(f"Salvando relatório em {output_path}")
+        with open(output_path, "w", encoding="utf-8") as f:
+            f.write(template)
 
-    # Salvar arquivo HTML
-    with open(output_path, "w", encoding="utf-8") as f:
-        f.write(html_content)
+        print(f"Relatório HTML gerado com sucesso em {output_path}")
+        return output_path
 
-    return output_path
+    except Exception as e:
+        print(f"Erro ao gerar relatório HTML: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return None

@@ -1,208 +1,117 @@
-import pandas as pd
 import os
-import tensorflow as tf
-from models.predictions import (
-    make_future_predictions,
-    prepare_data_for_prediction
-)
-from visualization.plots import create_combined_visualization
-from models.evaluation import evaluate_models
+import pandas as pd
+from data_loader import load_data
+from models import prepare_data_for_prediction, generate_predictions, generate_total_predictions
 from report_generator import generate_html_report
 
-# Configurar nível de log do TensorFlow e desabilitar GPU
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
-os.environ['CUDA_VISIBLE_DEVICES'] = '-1'  # Força uso apenas da CPU
-
-def load_data(csv_path='data/notifications_data.csv'):
+def main(frequency='monthly', target_year=2025):
     """
-    Carrega dados do arquivo CSV local.
+    Função principal que executa a análise de dados e gera o relatório.
+
+    Args:
+        frequency (str): Frequência dos dados ('monthly' ou 'weekly')
+        target_year (int): Ano alvo para as previsões
     """
-    if not os.path.exists(csv_path):
-        raise FileNotFoundError(f"Arquivo CSV não encontrado: {csv_path}")
-
-    print(f"Carregando dados do arquivo CSV: {csv_path}")
-    return pd.read_csv(csv_path)
-
-def main():
-    """
-    Função principal que coordena o fluxo de análise.
-    """
-    print("Iniciando análise preditiva de notificações...")
-
-    # Criar diretórios necessários
-    os.makedirs("data", exist_ok=True)
-    os.makedirs("output", exist_ok=True)
-
-    # Carregar dados
     try:
-        df_notifications = load_data()
-    except FileNotFoundError as e:
-        print(f"Erro ao carregar dados: {e}")
-        return
+        print("\nIniciando análise de dados...")
 
-    # Preparar dados
-    df_notifications = prepare_data_for_prediction(df_notifications)
+        # Carregar dados
+        print("\nCarregando dados...")
+        data = load_data(frequency=frequency)
+        if data is None or data.empty:
+            print("Erro: Não foi possível carregar os dados")
+            return
+        print(f"Dados carregados com sucesso: {len(data)} registros")
+        print(f"Colunas disponíveis: {', '.join(data.columns)}")
+        print(f"Período: {data.index[0]} até {data.index[-1]}")
 
-    # Análise por canal
-    channels = df_notifications['channels'].unique()
-    future_predictions = {}
-    evaluations = {}
+        # Preparar dados para previsão
+        print("\nPreparando dados para previsão...")
+        prepared_data = prepare_data_for_prediction(data, frequency=frequency)
+        if prepared_data is None or prepared_data.empty:
+            print("Erro: Não foi possível preparar os dados para previsão")
+            return
+        print(f"Dados preparados com sucesso: {len(prepared_data)} registros")
+        print(f"Colunas disponíveis: {', '.join(prepared_data.columns)}")
+        print(f"Período: {prepared_data.index[0]} até {prepared_data.index[-1]}")
 
-    for channel in channels:
-        print(f"\nAnalisando canal: {channel}")
-        try:
+        # Obter lista de canais únicos
+        channels = prepared_data['channel'].unique()
+        print(f"\nCanais encontrados: {', '.join(channels)}")
+
+        # Dicionário para armazenar previsões
+        all_predictions = {}
+        all_data = {}
+
+        # Gerar previsões para cada canal
+        for channel in channels:
+            print(f"\nProcessando canal: {channel}")
+
+            # Filtrar dados do canal
+            channel_data = prepared_data[prepared_data['channel'] == channel].copy()
+            if channel_data is None or channel_data.empty:
+                print(f"Aviso: Não há dados para o canal {channel}")
+                continue
+
+            print(f"Dados do canal: {len(channel_data)} registros")
+            if len(channel_data.index) > 0:
+                print(f"Período: {channel_data.index[0]} até {channel_data.index[-1]}")
+
+            # Agrupar por período e preparar para previsão
+            channel_data_grouped = channel_data.groupby(channel_data.index)['notification_count'].sum()
+            print(f"Dados agrupados: {len(channel_data_grouped)} registros")
+
+            # Criar DataFrame com os dados agrupados
+            channel_df = pd.DataFrame({
+                'notification_count': channel_data_grouped,
+                'channel': channel
+            })
+
             # Gerar previsões
-            future_predictions[channel] = make_future_predictions(
-                df_notifications,
-                channel,
-                months_ahead=12
-            )
+            print(f"\nGerando previsões para o canal {channel}...")
+            predictions = generate_predictions(channel_df, channel, frequency=frequency, target_year=target_year)
 
-            if future_predictions[channel] is not None:
-                # Avaliar modelos
-                evaluations[channel] = evaluate_models(
-                    df_notifications,
-                    future_predictions[channel]
-                )
-            else:
-                print(f"Não foi possível gerar previsões para o canal {channel}")
+            if predictions is None or not predictions:
+                print(f"Aviso: Não foi possível gerar previsões para o canal {channel}")
+                continue
 
-        except Exception as e:
-            print(f"Erro ao processar canal {channel}: {e}")
-            continue
+            print(f"Previsões geradas com sucesso para {len(predictions)} modelos")
+            for model_name, forecast in predictions.items():
+                if forecast is not None and not forecast.empty:
+                    print(f"Modelo {model_name}: {len(forecast)} registros")
+                    print(f"Período: {forecast.index[0]} até {forecast.index[-1]}")
 
-    # Criar e salvar visualizações
-    try:
-        os.makedirs("output", exist_ok=True)
+            # Armazenar dados e previsões
+            all_data[channel] = channel_df
+            all_predictions[channel] = predictions
 
-        # Visualização completa
-        figures = create_combined_visualization(
-            df_notifications,
-            future_predictions
-        )
+        if not all_predictions:
+            print("\nErro: Nenhuma previsão foi gerada")
+            return
 
-        if figures:
-            # Criar o HTML combinado com todos os gráficos
-            with open("output/analise_completa.html", "w", encoding="utf-8") as f:
-                f.write("""
-                <html>
-                <head>
-                    <title>Análise de Notificações</title>
-                    <style>
-                        body {
-                            font-family: Arial, sans-serif;
-                            margin: 0;
-                            padding: 20px;
-                            background-color: #f5f5f5;
-                            display: flex;
-                            flex-direction: column;
-                            align-items: center;
-                        }
-                        .plot-container {
-                            background-color: white;
-                            margin: 20px auto;
-                            padding: 30px;
-                            border-radius: 8px;
-                            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-                            width: 95%;
-                            max-width: 1500px;
-                            display: flex;
-                            justify-content: center;
-                            align-items: center;
-                        }
-                        .plot-container > div {
-                            width: 100% !important;
-                            height: 100% !important;
-                        }
-                        .js-plotly-plot {
-                            width: 100% !important;
-                        }
-                        .main-svg {
-                            width: 100% !important;
-                        }
-                    </style>
-                </head>
-                <body>
-                """)
+        # Gerar previsões totais
+        print("\nGerando previsões totais...")
+        total_predictions = generate_total_predictions(prepared_data, frequency=frequency, target_year=target_year)
+        if total_predictions:
+            all_predictions['total'] = total_predictions
 
-                # Adicionar cada gráfico em um container
-                for i, fig in enumerate(figures):
-                    f.write(f'<div class="plot-container">{fig.to_html(full_html=False, include_plotlyjs=True if i == 0 else False)}</div>')
-
-                f.write("</body></html>")
-            print(f"\nVisualização completa salva em: output/analise_completa.html")
-
-        # Visualização específica para 2024
-        figures_2024 = create_combined_visualization(
-            df_notifications,
-            future_predictions,
-            year_filter=2024
-        )
-
-        if figures_2024:
-            # Criar o HTML combinado com todos os gráficos de 2024
-            with open("output/analise_2024.html", "w", encoding="utf-8") as f:
-                f.write("""
-                <html>
-                <head>
-                    <title>Análise de Notificações - 2024</title>
-                    <style>
-                        body {
-                            font-family: Arial, sans-serif;
-                            margin: 0;
-                            padding: 20px;
-                            background-color: #f5f5f5;
-                            display: flex;
-                            flex-direction: column;
-                            align-items: center;
-                        }
-                        .plot-container {
-                            background-color: white;
-                            margin: 20px auto;
-                            padding: 30px;
-                            border-radius: 8px;
-                            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-                            width: 95%;
-                            max-width: 1500px;
-                            display: flex;
-                            justify-content: center;
-                            align-items: center;
-                        }
-                        .plot-container > div {
-                            width: 100% !important;
-                            height: 100% !important;
-                        }
-                        .js-plotly-plot {
-                            width: 100% !important;
-                        }
-                        .main-svg {
-                            width: 100% !important;
-                        }
-                    </style>
-                </head>
-                <body>
-                """)
-
-                # Adicionar cada gráfico em um container
-                for i, fig in enumerate(figures_2024):
-                    f.write(f'<div class="plot-container">{fig.to_html(full_html=False, include_plotlyjs=True if i == 0 else False)}</div>')
-
-                f.write("</body></html>")
-            print(f"Visualização 2024 salva em: output/analise_2024.html")
-
-        # Gerar relatório completo com abas
-        report_path = generate_html_report(
-            df_notifications,
-            future_predictions,
-            evaluations
-        )
-        print(f"Relatório detalhado salvo em: {report_path}")
+        print("\nGerando relatório HTML...")
+        generate_html_report(all_data, all_predictions, frequency=frequency)
+        print("Relatório HTML gerado com sucesso")
 
     except Exception as e:
-        print(f"Erro ao criar visualizações: {e}")
-        raise e  # Adicionar raise para ver o erro completo durante o desenvolvimento
-
-    print("\nAnálise concluída!")
+        print(f"\nErro durante a execução: {str(e)}")
+        import traceback
+        traceback.print_exc()
 
 if __name__ == "__main__":
-    main()
+    import argparse
+
+    parser = argparse.ArgumentParser(description='Gerar previsões de notificações')
+    parser.add_argument('--frequency', choices=['monthly', 'weekly'], default='monthly',
+                      help='Frequência dos dados (monthly ou weekly)')
+    parser.add_argument('--target-year', type=int, default=2025,
+                      help='Ano alvo para as previsões')
+
+    args = parser.parse_args()
+    main(frequency=args.frequency, target_year=args.target_year)

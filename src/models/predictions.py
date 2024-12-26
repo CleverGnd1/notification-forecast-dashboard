@@ -1,180 +1,247 @@
 import pandas as pd
 import numpy as np
-from .time_series import (
-    train_arima_model,
-    train_sarima_model,
-    train_ets_model
-)
-from .ml_models import (
-    train_random_forest,
-    train_xgboost,
-    train_lightgbm,
-    make_ml_predictions
-)
-from .deep_learning import (
-    train_lstm_model,
-    train_nbeats_model,
-    make_lstm_predictions,
-    make_nbeats_predictions
-)
+from sklearn.preprocessing import MinMaxScaler
+from statsmodels.tsa.arima.model import ARIMA
+from statsmodels.tsa.statespace.sarimax import SARIMAX
+from statsmodels.tsa.holtwinters import ExponentialSmoothing
+import statsmodels.api as sm
+from datetime import datetime, timedelta
 
-def make_future_predictions(data, channel, months_ahead=12):
-    """
-    Gera previsões para meses futuros com todos os modelos disponíveis.
-    """
-    print(f"\nGerando previsões para o canal {channel}...")
-
-    # Filtrar dados do canal específico
-    channel_data = data[data['channels'] == channel].copy()
-    if channel_data.empty:
-        print(f"Erro: Não foram encontrados dados para o canal {channel}")
-        return None
-
-    # Preparar dados para previsão
-    channel_data = channel_data.set_index('month')
-    channel_data = channel_data.sort_index()
-
-    # Gerar previsões usando todos os modelos
-    predictions = generate_predictions(channel_data, months_ahead)
-
-    if not predictions:
-        print("Erro: Nenhuma previsão foi gerada")
-        return None
-
-    print(f"Previsões geradas com sucesso para o canal {channel}")
-    return predictions
-
-def generate_predictions(data, months_ahead=12):
-    """
-    Gera previsões usando todos os modelos disponíveis.
-    """
-    print("\nIniciando geração de previsões...")
-    predictions = {}
-
-    # Preparar série temporal
-    time_series = data['notification_count'].astype(float)
-
-    # Modelos estatísticos
+def get_forecast_steps(last_date_str, target_year, frequency='monthly'):
+    """Helper function to calculate forecast steps."""
     try:
-        print("\n=== Modelos Estatísticos ===")
-        # ARIMA
-        arima_model = train_arima_model(time_series)
-        if arima_model is not None:
-            try:
-                arima_pred = arima_model.forecast(months_ahead)
-                predictions['Estatísticos - ARIMA'] = arima_pred
-                print("✓ ARIMA: Previsão gerada com sucesso")
-            except Exception as e:
-                print(f"✗ Erro na previsão ARIMA: {str(e)}")
+        # Convert string to datetime if needed
+        if isinstance(last_date_str, str):
+            last_date = pd.to_datetime(last_date_str)
+        elif isinstance(last_date_str, pd.Period):
+            last_date = last_date_str.to_timestamp()
+        else:
+            last_date = pd.to_datetime(str(last_date_str))
 
-        # SARIMA
-        sarima_model = train_sarima_model(time_series)
-        if sarima_model is not None:
-            try:
-                sarima_pred = sarima_model.forecast(months_ahead)
-                predictions['Estatísticos - SARIMA'] = sarima_pred
-                print("✓ SARIMA: Previsão gerada com sucesso")
-            except Exception as e:
-                print(f"✗ Erro na previsão SARIMA: {str(e)}")
-
-        # ETS
-        ets_model = train_ets_model(time_series)
-        if ets_model is not None:
-            try:
-                ets_pred = ets_model.forecast(months_ahead)
-                predictions['Estatísticos - ETS'] = ets_pred
-                print("✓ ETS: Previsão gerada com sucesso")
-            except Exception as e:
-                print(f"✗ Erro na previsão ETS: {str(e)}")
+        if frequency == 'monthly':
+            months_remaining = 12 - last_date.month if last_date.year == target_year else 12
+            return (target_year - last_date.year) * 12 + months_remaining
+        else:  # weekly
+            target_end = pd.to_datetime(f"{target_year}-12-31")
+            days_diff = (target_end - last_date).days
+            return max(1, days_diff // 7)
     except Exception as e:
-        print(f"Erro nos modelos estatísticos: {str(e)}")
+        print(f"Error in get_forecast_steps: {str(e)}")
+        return 12  # Default to one year of monthly forecasts
 
-    # Modelos de Machine Learning
+def create_forecast_dates(last_date, steps, frequency='monthly'):
+    """Helper function to create forecast dates."""
     try:
-        print("\n=== Modelos de Machine Learning ===")
-        # Preparar features
-        features_df = pd.DataFrame(index=data.index)
-        features_df['year'] = features_df.index.year
-        features_df['month'] = features_df.index.month
-        features_df['day'] = features_df.index.day
-        features_df['dayofweek'] = features_df.index.dayofweek
-        features_df['quarter'] = features_df.index.quarter
+        # Convert to timestamp if needed
+        if isinstance(last_date, pd.Period):
+            last_date = last_date.to_timestamp()
+        elif isinstance(last_date, str):
+            last_date = pd.to_datetime(last_date)
+        else:
+            last_date = pd.to_datetime(str(last_date))
 
-        feature_columns = ['year', 'month', 'day', 'dayofweek', 'quarter']
-        target = time_series
+        # Create date range
+        freq = 'M' if frequency == 'monthly' else 'W'
+        if frequency == 'monthly':
+            next_date = last_date + pd.DateOffset(months=1)
+        else:
+            next_date = last_date + timedelta(days=7)
 
-        # Random Forest
-        rf_model = train_random_forest(features_df[feature_columns], target)
-        if rf_model:
-            rf_pred = make_ml_predictions(rf_model, feature_columns, data, months_ahead)
-            if rf_pred is not None:
-                predictions['Machine Learning - Random Forest'] = rf_pred
-                print("✓ Random Forest: Previsão gerada com sucesso")
-
-        # XGBoost
-        xgb_model = train_xgboost(features_df[feature_columns], target)
-        if xgb_model:
-            xgb_pred = make_ml_predictions(xgb_model, feature_columns, data, months_ahead)
-            if xgb_pred is not None:
-                predictions['Machine Learning - XGBoost'] = xgb_pred
-                print("✓ XGBoost: Previsão gerada com sucesso")
-
-        # LightGBM
-        lgb_model = train_lightgbm(features_df[feature_columns], target)
-        if lgb_model:
-            lgb_pred = make_ml_predictions(lgb_model, feature_columns, data, months_ahead)
-            if lgb_pred is not None:
-                predictions['Machine Learning - LightGBM'] = lgb_pred
-                print("✓ LightGBM: Previsão gerada com sucesso")
+        dates = pd.date_range(start=next_date, periods=steps, freq=freq)
+        return dates
     except Exception as e:
-        print(f"Erro nos modelos de Machine Learning: {str(e)}")
+        print(f"Error in create_forecast_dates: {str(e)}")
+        return pd.date_range(start=datetime.now(), periods=steps, freq='M')
 
-    # Modelos de Deep Learning
+def prepare_time_series(data, frequency='monthly'):
+    """Helper function to prepare time series data."""
     try:
-        print("\n=== Modelos de Deep Learning ===")
-        # LSTM
-        lstm_model, lstm_scaler = train_lstm_model(data)
-        if lstm_model and lstm_scaler:
-            lstm_pred = make_lstm_predictions(lstm_model, lstm_scaler, data, months_ahead)
-            if lstm_pred is not None:
-                predictions['Deep Learning - LSTM'] = lstm_pred
-                print("✓ LSTM: Previsão gerada com sucesso")
+        # Convert index to datetime
+        if isinstance(data.index[0], pd.Period):
+            dates = data.index.to_timestamp()
+        else:
+            dates = pd.to_datetime(data.index)
 
-        # N-BEATS
-        nbeats_model, nbeats_scaler = train_nbeats_model(data)
-        if nbeats_model and nbeats_scaler:
-            nbeats_pred = make_nbeats_predictions(nbeats_model, nbeats_scaler, data, months_ahead)
-            if nbeats_pred is not None:
-                predictions['Deep Learning - N-BEATS'] = nbeats_pred
-                print("✓ N-BEATS: Previsão gerada com sucesso")
+        # Create proper time series
+        freq = 'M' if frequency == 'monthly' else 'W'
+        ts_index = pd.date_range(start=dates.min(), end=dates.max(), freq=freq)
+
+        # Reindex and forward fill any gaps
+        ts_data = pd.Series(data.values, index=dates)
+        ts_data = ts_data.reindex(ts_index, method='ffill')
+
+        return ts_data
     except Exception as e:
-        print(f"Erro nos modelos de Deep Learning: {str(e)}")
+        print(f"Error in prepare_time_series: {str(e)}")
+        return pd.Series(data.values)
 
-    print("\nGeração de previsões concluída!")
-    print(f"Total de modelos com previsões: {len(predictions)}")
-    for model_name in predictions.keys():
-        print(f"- {model_name}")
-
-    return predictions
-
-def prepare_data_for_prediction(df):
+def prepare_data_for_prediction(data, frequency='monthly'):
     """
     Prepara dados para modelagem preditiva.
     """
-    df = df.copy()
+    try:
+        print("\nPreparando dados para previsão...")
+        print(f"Dados recebidos: {len(data)} registros")
+        print(f"Colunas disponíveis: {', '.join(data.columns)}")
+        print(f"Índice: {data.index}")
 
-    # Converter para datetime
-    df['month'] = pd.to_datetime(df['month'])
+        # Criar cópia para não modificar o original
+        df = data.copy()
 
-    # Remover valores nulos
-    df = df.dropna()
+        # Remover valores nulos
+        df = df.dropna()
+        print(f"Registros após remover nulos: {len(df)}")
 
-    # Agrupar por mês e canal, somando as contagens e removendo duplicatas
-    df = (df.groupby(['month', 'channels'])['notification_count']
-          .sum()
-          .reset_index())
+        # Garantir que temos as colunas corretas
+        if 'channel' not in df.columns:
+            print("Erro: Coluna 'channel' não encontrada")
+            return pd.DataFrame()
+        print(f"Registros após agrupamento: {len(df)}")
 
-    # Ordenar por data
-    df = df.sort_values('month')
+        print(f"Dados preparados com sucesso")
+        print(f"Período: {df.index.min()} até {df.index.max()}")
+        print(f"Canais únicos: {', '.join(df['channel'].unique())}")
 
-    return df
+        return df
+
+    except Exception as e:
+        print(f"Erro ao preparar dados: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return pd.DataFrame()
+
+def generate_predictions(data, channel, frequency='monthly', target_year=2025):
+    """
+    Gera previsões usando diferentes modelos.
+    """
+    try:
+        print(f"\nGerando previsões para o canal {channel}...")
+        print(f"Frequência: {frequency}")
+        print(f"Ano alvo: {target_year}")
+
+        if data is None or data.empty:
+            print("Aviso: DataFrame está vazio")
+            return {}
+
+        # Verificar se há dados suficientes
+        if len(data) < 2:
+            print("Aviso: Não há dados suficientes para gerar previsões")
+            return {}
+
+        try:
+            # Preparar dados do canal
+            if isinstance(data, pd.DataFrame):
+                if 'channel' in data.columns:
+                    channel_data = data[data['channel'] == channel]['notification_count']
+                else:
+                    channel_data = data['notification_count']
+            else:
+                channel_data = data
+
+            # Garantir que os dados estão ordenados pelo índice
+            channel_data = pd.Series(channel_data).sort_index()
+
+            if channel_data.empty:
+                print(f"Aviso: Não há dados para o canal {channel}")
+                return {}
+
+            # Preparar série temporal
+            ts_data = prepare_time_series(channel_data, frequency)
+            ts_values = ts_data.values.astype(float)
+
+            # Calcular número de períodos para previsão
+            forecast_steps = get_forecast_steps(ts_data.index[-1], target_year, frequency)
+            print(f"Períodos para previsão: {forecast_steps}")
+
+            # Criar datas para previsões
+            forecast_dates = create_forecast_dates(ts_data.index[-1], forecast_steps, frequency)
+
+        except Exception as e:
+            print(f"Erro ao preparar dados do canal: {str(e)}")
+            return {}
+
+        predictions = {}
+
+        # ARIMA predictions
+        print("\nTentando modelo ARIMA...")
+        try:
+            arima = ARIMA(ts_data, order=(1, 1, 1))
+            arima_fit = arima.fit()
+            forecast_values = arima_fit.forecast(steps=forecast_steps)
+            predictions['ARIMA'] = pd.Series(forecast_values, index=forecast_dates)
+            print(f"Previsões ARIMA geradas: {len(predictions['ARIMA'])} registros")
+        except Exception as e:
+            print(f"Erro ao gerar previsões ARIMA: {str(e)}")
+
+        # SARIMA predictions
+        print("\nTentando modelo SARIMA...")
+        try:
+            seasonal_order = (1, 1, 1, 12) if frequency == 'monthly' else (1, 1, 1, 52)
+            sarima = SARIMAX(ts_data, order=(1, 1, 1), seasonal_order=seasonal_order)
+            sarima_fit = sarima.fit(disp=False)
+            forecast_values = sarima_fit.forecast(steps=forecast_steps)
+            predictions['SARIMA'] = pd.Series(forecast_values, index=forecast_dates)
+            print(f"Previsões SARIMA geradas: {len(predictions['SARIMA'])} registros")
+        except Exception as e:
+            print(f"Erro ao gerar previsões SARIMA: {str(e)}")
+
+        # ETS predictions
+        print("\nTentando modelo ETS...")
+        try:
+            model = ExponentialSmoothing(
+                ts_data,
+                seasonal_periods=12 if frequency == 'monthly' else 52,
+                trend='add',
+                seasonal='add'
+            )
+            results = model.fit()
+            forecast_values = results.forecast(steps=forecast_steps)
+            predictions['ETS'] = pd.Series(forecast_values, index=forecast_dates)
+            print(f"Previsões ETS geradas: {len(predictions['ETS'])} registros")
+        except Exception as e:
+            print(f"Erro ao gerar previsões ETS: {str(e)}")
+
+        # Convert predictions to PeriodIndex
+        freq = 'M' if frequency == 'monthly' else 'W'
+        for model_name in predictions:
+            predictions[model_name].index = predictions[model_name].index.to_period(freq)
+
+        # Verificar se alguma previsão foi gerada
+        if not predictions:
+            print("\nAviso: Nenhum modelo conseguiu gerar previsões")
+            return {}
+
+        print(f"\nPrevisões geradas com sucesso para {len(predictions)} modelos")
+        for model_name, forecast in predictions.items():
+            print(f"Modelo {model_name}: {len(forecast)} registros")
+            if not forecast.empty:
+                print(f"Período: {forecast.index[0]} até {forecast.index[-1]}")
+                print(f"Valores: min={forecast.min():.2f}, max={forecast.max():.2f}")
+
+        return predictions
+
+    except Exception as e:
+        print(f"Erro ao gerar previsões: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return {}
+
+def generate_total_predictions(data, frequency='monthly', target_year=2025):
+    """
+    Gera previsões para o total de notificações de todos os canais.
+    """
+    print("\nGerando previsões para o total de notificações...")
+
+    # Agrupar dados por período, somando todas as notificações
+    total_data = data.groupby(data.index)['notification_count'].sum().to_frame()
+    total_data['channel'] = 'total'  # Adicionar coluna de canal para manter compatibilidade
+
+    # Gerar previsões usando a função existente
+    predictions = generate_predictions(
+        total_data,
+        channel='total',
+        frequency=frequency,
+        target_year=target_year
+    )
+
+    return predictions

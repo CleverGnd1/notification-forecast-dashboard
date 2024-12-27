@@ -1,0 +1,508 @@
+
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Análise de Previsões de Notificações</title>
+            <style>
+                body {
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                    margin: 0;
+                    padding: 0;
+                    background-color: #f0f2f5;
+                    color: #1a1a1a;
+                }
+                .container {
+                    max-width: 1400px;
+                    margin: 40px auto;
+                    padding: 30px;
+                }
+                .header {
+                    background-color: #ffffff;
+                    padding: 30px;
+                    border-radius: 12px;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                    margin-bottom: 30px;
+                }
+                h1 {
+                    color: #1a73e8;
+                    margin: 0;
+                    font-size: 2.5em;
+                    text-align: center;
+                }
+                .summary {
+                    background-color: #ffffff;
+                    padding: 25px;
+                    border-radius: 12px;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                    margin-bottom: 30px;
+                }
+                .summary h2 {
+                    color: #1a73e8;
+                    margin-top: 0;
+                }
+                .channel-section {
+                    background-color: #ffffff;
+                    padding: 25px;
+                    border-radius: 12px;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                    margin-bottom: 30px;
+                }
+                .channel-section h2 {
+                    color: #1a73e8;
+                    margin-top: 0;
+                    padding-bottom: 15px;
+                    border-bottom: 2px solid #e8eaed;
+                }
+                .plot-container {
+                    margin: 25px 0;
+                    width: 100%;
+                    height: 600px;
+                }
+                .plot-container h3 {
+                    color: #5f6368;
+                    margin: 15px 0;
+                }
+                .stats-section {
+                    margin: 30px 0;
+                }
+                .stats-section h3 {
+                    color: #1a73e8;
+                    margin: 25px 0 15px 0;
+                    padding-bottom: 10px;
+                    border-bottom: 1px solid #e8eaed;
+                }
+                .stats {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+                    gap: 20px;
+                    margin: 20px 0;
+                }
+                .stat-card {
+                    background-color: #f8f9fa;
+                    padding: 20px;
+                    border-radius: 12px;
+                    text-align: center;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+                    transition: transform 0.2s;
+                }
+                .stat-card:hover {
+                    transform: translateY(-2px);
+                    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+                }
+                .stat-card h4 {
+                    color: #5f6368;
+                    margin: 0 0 15px 0;
+                    font-size: 1.1em;
+                }
+                .stat-value {
+                    font-size: 1.8em;
+                    color: #1a73e8;
+                    font-weight: bold;
+                    margin-bottom: 8px;
+                }
+                .stat-period {
+                    color: #5f6368;
+                    font-size: 0.9em;
+                    margin-top: 5px;
+                }
+                .stat-model {
+                    color: #34a853;
+                    font-size: 0.9em;
+                    margin-top: 5px;
+                    font-style: italic;
+                }
+                .footer {
+                    text-align: center;
+                    padding: 20px;
+                    color: #5f6368;
+                    font-size: 0.9em;
+                    background-color: #ffffff;
+                    border-radius: 12px;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                }
+                iframe {
+                    width: 100%;
+                    height: 100%;
+                    border: none;
+                    border-radius: 8px;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <div class="header">
+                    <h1>Relatório de Previsões de Notificações</h1>
+                </div>
+
+            <div class="channel-section">
+                <h2>Total de Notificações (Todos os Canais)</h2>
+                <div class="stats-section">
+                    <h3>Estatísticas 2023</h3>
+                    <div class="stats">
+                        <div class="stat-card">
+                            <h4>Total de Notificações</h4>
+                            <div class="stat-value">94,630,072</div>
+                        </div>
+                        <div class="stat-card">
+                            <h4>Média Mensal de Notificações</h4>
+                            <div class="stat-value">7,885,839</div>
+                        </div>
+                        <div class="stat-card">
+                            <h4>Mês com Maior Volume</h4>
+                            <div class="stat-value">23,002,367</div>
+                            <div class="stat-period">Mês: 2023-11</div>
+                        </div>
+                        <div class="stat-card">
+                            <h4>Mês com Menor Volume</h4>
+                            <div class="stat-value">3,019,419</div>
+                            <div class="stat-period">Mês: 2023-01</div>
+                        </div>
+                    </div>
+
+                    <h3>Estatísticas 2024</h3>
+                    <div class="stats">
+                        <div class="stat-card">
+                            <h4>Total de Notificações</h4>
+                            <div class="stat-value">536,152,057</div>
+                        </div>
+                        <div class="stat-card">
+                            <h4>Média Mensal de Notificações</h4>
+                            <div class="stat-value">44,679,338</div>
+                        </div>
+                        <div class="stat-card">
+                            <h4>Mês com Maior Volume</h4>
+                            <div class="stat-value">73,640,965</div>
+                            <div class="stat-period">Mês: 2024-11</div>
+                        </div>
+                        <div class="stat-card">
+                            <h4>Mês com Menor Volume</h4>
+                            <div class="stat-value">25,540,344</div>
+                            <div class="stat-period">Mês: 2024-01</div>
+                        </div>
+                    </div>
+
+                    <h3>Previsões 2025</h3>
+                    <div class="stats">
+                        <div class="stat-card">
+                            <h4>Total Previsto (Média dos Modelos)</h4>
+                            <div class="stat-value">810,228,248</div>
+                        </div>
+                        <div class="stat-card">
+                            <h4>Mês com Maior Volume Previsto</h4>
+                            <div class="stat-value">119,537,683</div>
+                            <div class="stat-period">Mês: 2025-12</div>
+                            <div class="stat-model">Modelo: Estatísticos - SARIMA</div>
+                        </div>
+                        <div class="stat-card">
+                            <h4>Mês com Menor Volume Previsto</h4>
+                            <div class="stat-value">24,585,045</div>
+                            <div class="stat-period">Mês: 2025-01</div>
+                            <div class="stat-model">Modelo: Machine Learning - LightGBM</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="plot-container">
+                    <h3>Histórico e Previsões Completas - Total</h3>
+                    <iframe src="plots/plot_total.html"></iframe>
+                </div>
+            </div>
+
+                <div class="channel-section">
+                    <h2>Canal: email</h2>
+                    <div class="stats-section">
+                        <h3>Estatísticas 2023</h3>
+                        <div class="stats">
+                            <div class="stat-card">
+                                <h4>Total de Notificações</h4>
+                                <div class="stat-value">38,956,090</div>
+                            </div>
+                            <div class="stat-card">
+                                <h4>Média Mensal de Notificações</h4>
+                                <div class="stat-value">3,246,341</div>
+                            </div>
+                            <div class="stat-card">
+                                <h4>Mês com Maior Volume</h4>
+                                <div class="stat-value">9,492,976</div>
+                                <div class="stat-period">Mês: 2023-11</div>
+                            </div>
+                            <div class="stat-card">
+                                <h4>Mês com Menor Volume</h4>
+                                <div class="stat-value">1,600,977</div>
+                                <div class="stat-period">Mês: 2023-06</div>
+                            </div>
+                        </div>
+
+                        <h3>Estatísticas 2024</h3>
+                        <div class="stats">
+                            <div class="stat-card">
+                                <h4>Total de Notificações</h4>
+                                <div class="stat-value">115,207,729</div>
+                            </div>
+                            <div class="stat-card">
+                                <h4>Média Mensal de Notificações</h4>
+                                <div class="stat-value">9,600,644</div>
+                            </div>
+                            <div class="stat-card">
+                                <h4>Mês com Maior Volume</h4>
+                                <div class="stat-value">19,048,518</div>
+                                <div class="stat-period">Mês: 2024-02</div>
+                            </div>
+                            <div class="stat-card">
+                                <h4>Mês com Menor Volume</h4>
+                                <div class="stat-value">3,793,528</div>
+                                <div class="stat-period">Mês: 2024-05</div>
+                            </div>
+                        </div>
+
+                        <h3>Previsões 2025</h3>
+                        <div class="stats">
+                            <div class="stat-card">
+                                <h4>Total Previsto (Média dos Modelos)</h4>
+                                <div class="stat-value">130,113,631</div>
+                            </div>
+                            <div class="stat-card">
+                                <h4>Mês com Maior Volume Previsto</h4>
+                                <div class="stat-value">34,915,768</div>
+                                <div class="stat-period">Mês: 2025-02</div>
+                                <div class="stat-model">Modelo: Estatísticos - SARIMA</div>
+                            </div>
+                            <div class="stat-card">
+                                <h4>Mês com Menor Volume Previsto</h4>
+                                <div class="stat-value">3,978,049</div>
+                                <div class="stat-period">Mês: 2025-05</div>
+                                <div class="stat-model">Modelo: Estatísticos - SARIMA</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="plot-container">
+                        <h3>Histórico e Previsões Completas</h3>
+                        <iframe src="https://drive.google.com/file/d/1NMelg7OVB8QkurVpZy0vaPgD-OBJyIXX/preview"></iframe>
+                    </div>
+                </div>
+
+                <div class="channel-section">
+                    <h2>Canal: sms</h2>
+                    <div class="stats-section">
+                        <h3>Estatísticas 2023</h3>
+                        <div class="stats">
+                            <div class="stat-card">
+                                <h4>Total de Notificações</h4>
+                                <div class="stat-value">7,034,329</div>
+                            </div>
+                            <div class="stat-card">
+                                <h4>Média Mensal de Notificações</h4>
+                                <div class="stat-value">586,194</div>
+                            </div>
+                            <div class="stat-card">
+                                <h4>Mês com Maior Volume</h4>
+                                <div class="stat-value">1,158,970</div>
+                                <div class="stat-period">Mês: 2023-09</div>
+                            </div>
+                            <div class="stat-card">
+                                <h4>Mês com Menor Volume</h4>
+                                <div class="stat-value">120,920</div>
+                                <div class="stat-period">Mês: 2023-02</div>
+                            </div>
+                        </div>
+
+                        <h3>Estatísticas 2024</h3>
+                        <div class="stats">
+                            <div class="stat-card">
+                                <h4>Total de Notificações</h4>
+                                <div class="stat-value">7,341,035</div>
+                            </div>
+                            <div class="stat-card">
+                                <h4>Média Mensal de Notificações</h4>
+                                <div class="stat-value">611,753</div>
+                            </div>
+                            <div class="stat-card">
+                                <h4>Mês com Maior Volume</h4>
+                                <div class="stat-value">1,248,843</div>
+                                <div class="stat-period">Mês: 2024-01</div>
+                            </div>
+                            <div class="stat-card">
+                                <h4>Mês com Menor Volume</h4>
+                                <div class="stat-value">231,658</div>
+                                <div class="stat-period">Mês: 2024-09</div>
+                            </div>
+                        </div>
+
+                        <h3>Previsões 2025</h3>
+                        <div class="stats">
+                            <div class="stat-card">
+                                <h4>Total Previsto (Média dos Modelos)</h4>
+                                <div class="stat-value">6,292,059</div>
+                            </div>
+                            <div class="stat-card">
+                                <h4>Mês com Maior Volume Previsto</h4>
+                                <div class="stat-value">1,453,444</div>
+                                <div class="stat-period">Mês: 2025-09</div>
+                                <div class="stat-model">Modelo: Estatísticos - SARIMA</div>
+                            </div>
+                            <div class="stat-card">
+                                <h4>Mês com Menor Volume Previsto</h4>
+                                <div class="stat-value">231,658</div>
+                                <div class="stat-period">Mês: 2025-09</div>
+                                <div class="stat-model">Modelo: Machine Learning - XGBoost</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="plot-container">
+                        <h3>Histórico e Previsões Completas</h3>
+                        <iframe src="plots/plot_sms.html"></iframe>
+                    </div>
+                </div>
+
+                <div class="channel-section">
+                    <h2>Canal: whatsapp</h2>
+                    <div class="stats-section">
+                        <h3>Estatísticas 2023</h3>
+                        <div class="stats">
+                            <div class="stat-card">
+                                <h4>Total de Notificações</h4>
+                                <div class="stat-value">32,898,258</div>
+                            </div>
+                            <div class="stat-card">
+                                <h4>Média Mensal de Notificações</h4>
+                                <div class="stat-value">2,741,522</div>
+                            </div>
+                            <div class="stat-card">
+                                <h4>Mês com Maior Volume</h4>
+                                <div class="stat-value">6,513,369</div>
+                                <div class="stat-period">Mês: 2023-12</div>
+                            </div>
+                            <div class="stat-card">
+                                <h4>Mês com Menor Volume</h4>
+                                <div class="stat-value">445,560</div>
+                                <div class="stat-period">Mês: 2023-02</div>
+                            </div>
+                        </div>
+
+                        <h3>Estatísticas 2024</h3>
+                        <div class="stats">
+                            <div class="stat-card">
+                                <h4>Total de Notificações</h4>
+                                <div class="stat-value">96,015,714</div>
+                            </div>
+                            <div class="stat-card">
+                                <h4>Média Mensal de Notificações</h4>
+                                <div class="stat-value">8,001,310</div>
+                            </div>
+                            <div class="stat-card">
+                                <h4>Mês com Maior Volume</h4>
+                                <div class="stat-value">9,813,170</div>
+                                <div class="stat-period">Mês: 2024-08</div>
+                            </div>
+                            <div class="stat-card">
+                                <h4>Mês com Menor Volume</h4>
+                                <div class="stat-value">6,339,994</div>
+                                <div class="stat-period">Mês: 2024-12</div>
+                            </div>
+                        </div>
+
+                        <h3>Previsões 2025</h3>
+                        <div class="stats">
+                            <div class="stat-card">
+                                <h4>Total Previsto (Média dos Modelos)</h4>
+                                <div class="stat-value">101,941,568</div>
+                            </div>
+                            <div class="stat-card">
+                                <h4>Mês com Maior Volume Previsto</h4>
+                                <div class="stat-value">14,201,749</div>
+                                <div class="stat-period">Mês: 2025-12</div>
+                                <div class="stat-model">Modelo: Estatísticos - SARIMA</div>
+                            </div>
+                            <div class="stat-card">
+                                <h4>Mês com Menor Volume Previsto</h4>
+                                <div class="stat-value">5,329,303</div>
+                                <div class="stat-period">Mês: 2025-01</div>
+                                <div class="stat-model">Modelo: Machine Learning - LightGBM</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="plot-container">
+                        <h3>Histórico e Previsões Completas</h3>
+                        <iframe src="plots/plot_whatsapp.html"></iframe>
+                    </div>
+                </div>
+
+                <div class="channel-section">
+                    <h2>Canal: push</h2>
+                    <div class="stats-section">
+                        <h3>Estatísticas 2023</h3>
+                        <div class="stats">
+                            <div class="stat-card">
+                                <h4>Total de Notificações</h4>
+                                <div class="stat-value">15,741,395</div>
+                            </div>
+                            <div class="stat-card">
+                                <h4>Média Mensal de Notificações</h4>
+                                <div class="stat-value">5,247,132</div>
+                            </div>
+                            <div class="stat-card">
+                                <h4>Mês com Maior Volume</h4>
+                                <div class="stat-value">8,808,281</div>
+                                <div class="stat-period">Mês: 2023-12</div>
+                            </div>
+                            <div class="stat-card">
+                                <h4>Mês com Menor Volume</h4>
+                                <div class="stat-value">683,713</div>
+                                <div class="stat-period">Mês: 2023-10</div>
+                            </div>
+                        </div>
+
+                        <h3>Estatísticas 2024</h3>
+                        <div class="stats">
+                            <div class="stat-card">
+                                <h4>Total de Notificações</h4>
+                                <div class="stat-value">317,587,579</div>
+                            </div>
+                            <div class="stat-card">
+                                <h4>Média Mensal de Notificações</h4>
+                                <div class="stat-value">26,465,632</div>
+                            </div>
+                            <div class="stat-card">
+                                <h4>Mês com Maior Volume</h4>
+                                <div class="stat-value">52,526,574</div>
+                                <div class="stat-period">Mês: 2024-11</div>
+                            </div>
+                            <div class="stat-card">
+                                <h4>Mês com Menor Volume</h4>
+                                <div class="stat-value">8,510,365</div>
+                                <div class="stat-period">Mês: 2024-01</div>
+                            </div>
+                        </div>
+
+                        <h3>Previsões 2025</h3>
+                        <div class="stats">
+                            <div class="stat-card">
+                                <h4>Total Previsto (Média dos Modelos)</h4>
+                                <div class="stat-value">485,301,260</div>
+                            </div>
+                            <div class="stat-card">
+                                <h4>Mês com Maior Volume Previsto</h4>
+                                <div class="stat-value">57,571,279</div>
+                                <div class="stat-period">Mês: 2025-12</div>
+                                <div class="stat-model">Modelo: Estatísticos - ARIMA</div>
+                            </div>
+                            <div class="stat-card">
+                                <h4>Mês com Menor Volume Previsto</h4>
+                                <div class="stat-value">20,098,691</div>
+                                <div class="stat-period">Mês: 2025-01</div>
+                                <div class="stat-model">Modelo: Machine Learning - LightGBM</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="plot-container">
+                        <h3>Histórico e Previsões Completas</h3>
+                        <iframe src="plots/plot_push.html"></iframe>
+                    </div>
+                </div>
+
+                <div class="footer">
+                    <p>Relatório gerado automaticamente | Frequência: monthly | Data: 2024-12-26 16:20:04</p>
+                </div>
+            </div>
+        </body>
+        </html>
